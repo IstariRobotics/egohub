@@ -2,7 +2,7 @@
 
 An end-to-end Python pipeline for ingesting, normalizing, and serving egocentric datasets for humanoid robotics research.
 
-## 🎯 **Core Workflow: Ingest → Re-express → Re-serve**
+## Core Workflow: Ingest → Re-express → Re-serve
 
 This project implements a complete pipeline for processing egocentric data:
 
@@ -10,7 +10,7 @@ This project implements a complete pipeline for processing egocentric data:
 2. **Re-express**: Convert to a canonical HDF5 format with standardized coordinate systems
 3. **Re-serve**: Provide PyTorch datasets and Rerun visualizations for easy access and validation
 
-## 🚀 **Quick Start**
+## Quick Start
 
 ### Prerequisites
 
@@ -59,7 +59,7 @@ python scripts/visualizers/view_egodex_direct.py \
     --max-frames 50
 ```
 
-## 📁 **Project Structure**
+## Project Structure
 
 ```
 egohub/
@@ -84,7 +84,7 @@ egohub/
     └── processed/            # Processed canonical format
 ```
 
-## 🔧 **Key Features**
+## Key Features
 
 ### **Canonical Data Format**
 - **Standardized HDF5 structure** with consistent coordinate systems
@@ -110,33 +110,35 @@ egohub/
 - **Video optimization** with efficient encoding
 - **Comprehensive logging** and validation
 
-## 📊 **Data Schema**
+## Canonical Data Schema
 
-Our canonical HDF5 format organizes data as follows:
+Our canonical HDF5 format organizes data into groups, with each group representing a distinct trajectory from a source dataset. All spatial data is in our **right-handed, Z-up** world coordinate frame.
 
-```
-trajectory_XXXX/
-├── camera/
-│   ├── intrinsics           # 3x3 camera matrix
-│   └── pose_in_world        # 4x4 transformation matrices
-├── hands/
-│   ├── left/pose_in_world   # Left hand poses (if available)
-│   └── right/pose_in_world  # Right hand poses (if available)
-├── metadata/
-│   ├── timestamps_ns        # Frame timestamps
-│   └── action_label         # Human-readable action description
-└── rgb/
-    ├── image_bytes          # JPG-encoded video frames
-    └── frame_sizes          # Actual frame sizes for reconstruction
-```
+The following table details the standardized paths within each trajectory group and their expected data types. It also indicates whether scripts exist to generate a data stream if it's missing from a source dataset.
 
-## 🎯 **Coordinate Systems**
+| Canonical Path | Data Type & Shape | Description | Generation Script | Generation Dependencies |
+| :--- | :--- | :--- | :--- | :--- |
+| **`metadata/timestamps_ns`** | `uint64` (N,) | Nanosecond timestamps for each frame. | N/A | Frame rate (e.g., 30Hz) |
+| **`camera/intrinsics`** | `float32` (3, 3) | Camera intrinsic matrix (fx, fy, cx, cy). | N/A | - |
+| **`camera/pose_in_world`** | `float32` (N, 4, 4) | 4x4 pose matrix of the camera in the world. | N/A | - |
+| **`rgb/image_bytes`** | `uint8` (N, S) | Variable-length, JPG-encoded image bytes. | N/A | - |
+| **`rgb/frame_sizes`** | `int32` (N,) | Size of each encoded frame in `image_bytes`. | N/A | `rgb/image_bytes` |
+| **`hands/left/pose_in_world`**| `float32` (N, 4, 4) | 4x4 pose of the left hand. | No | - |
+| **`hands/right/pose_in_world`**| `float32` (N, 4, 4) | 4x4 pose of the right hand. | No | - |
+| **`skeleton/joint_names`** | `string[]` (J,) | Attribute list of joint names. | No | - |
+| **`skeleton/positions`** | `float32` (N, J, 3) | 3D position of each joint in the world. | No | - |
+| **`skeleton/confidences`** | `float32` (N, J) | Confidence value for each joint detection. | No | - |
+| **`depth/image`** | `uint16` (N, H, W) | Per-pixel depth image (e.g., in mm). | No | - |
+
+_**Notes:** N = number of frames, S = max encoded image size, J = number of joints, H/W = image height/width._
+
+## Coordinate Systems
 
 - **World Frame**: Right-handed, Z-up, Y-forward, X-right (meters)
 - **Camera Frame**: Standard OpenCV model (Z-forward, Y-down, X-right)
 - **Transformations**: Automatic conversion from ARKit to canonical frame
 
-## 🧪 **Testing**
+## Testing
 
 ```bash
 # Run unit tests
@@ -153,19 +155,19 @@ print(f'Loaded {len(dataset)} frames from {len(set(idx[0] for idx in dataset.fra
 "
 ```
 
-## 🔄 **Comparison: Canonical vs. Direct Approaches**
+## Comparison: Canonical vs. Direct Approaches
 
 | Feature | Canonical Format | Direct EgoDex |
 |---------|------------------|---------------|
-| **Data Portability** | ✅ Universal format | ❌ EgoDex-specific |
-| **Coordinate Systems** | ✅ Standardized | ⚠️ Original format |
-| **Performance** | ✅ Optimized storage | ⚠️ Original size |
-| **Extensibility** | ✅ Easy to add datasets | ❌ Hard to extend |
-| **Validation** | ✅ End-to-end tested | ✅ Reference implementation |
+| **Data Portability** | Universal format | EgoDex-specific |
+| **Coordinate Systems** | Standardized | Original format |
+| **Performance** | Optimized storage | Original size |
+| **Extensibility** | Easy to add datasets | Hard to extend |
+| **Validation** | End-to-end tested | Reference implementation |
 
-## 🚧 **Development Status**
+## Development Status
 
-### ✅ **Completed**
+### Completed
 - [x] EgoDex adapter with coordinate transformations
 - [x] Canonical HDF5 format with proper schema
 - [x] PyTorch dataset class with global indexing
@@ -174,19 +176,19 @@ print(f'Loaded {len(dataset)} frames from {len(set(idx[0] for idx in dataset.fra
 - [x] Camera parameter utilities
 - [x] Comprehensive testing framework
 
-### 🔄 **In Progress**
+### In Progress
 - [ ] Depth data support
 - [ ] Hand mesh reconstruction
 - [ ] Additional dataset adapters
 - [ ] Advanced visualization features
 
-### 📋 **Planned**
+### Planned
 - [ ] Real-time data streaming
 - [ ] Multi-modal fusion
 - [ ] Training utilities
 - [ ] Performance optimization
 
-## 🤝 **Contributing**
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -195,11 +197,11 @@ print(f'Loaded {len(dataset)} frames from {len(set(idx[0] for idx in dataset.fra
 5. Update documentation
 6. Submit a pull request
 
-## 📄 **License**
+## License
 
 [Add your license information here]
 
-## 🙏 **Acknowledgments**
+## Acknowledgments
 
 - **Pablo's Implementation**: Reference implementation for direct EgoDex visualization
 - **EgoDex Dataset**: Original egocentric dataset
