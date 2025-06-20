@@ -98,4 +98,16 @@ CANONICAL_SCHEMA = {
             },
         },
     },
-} 
+}
+
+# A definitive list of all possible canonical data streams for validation.
+CANONICAL_DATA_STREAMS = [
+    "metadata/timestamps_ns",
+    "camera/intrinsics",
+    "camera/pose_in_world",
+    "hands/left/pose_in_world",
+    "hands/right/pose_in_world",
+    "skeleton/positions",
+    "skeleton/confidences",
+    "rgb/image_bytes",
+] 

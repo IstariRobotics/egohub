@@ -25,7 +25,7 @@ import h5py
 import numpy as np
 from tqdm import tqdm
 
-from egohub.schema import CANONICAL_SCHEMA
+from egohub.schema import CANONICAL_SCHEMA, CANONICAL_DATA_STREAMS
 from egohub.transforms.coordinates import arkit_to_canonical_poses
 
 # Configure basic logging
@@ -60,12 +60,15 @@ def process_sequence(seq_info: dict, traj_group: h5py.Group):
         seq_info (dict): A dictionary containing paths and names for the sequence.
         traj_group (h5py.Group): The HDF5 group to write the processed data into.
     """
+    logging.info(f"--- Processing sequence: {seq_info['task_name']}/{seq_info['sequence_name']} ---")
+    found_streams = set()
+
     with h5py.File(seq_info['hdf5_path'], 'r') as f_in:
         # --- Metadata ---
         metadata_group = traj_group.create_group("metadata")
         metadata_group.attrs['uuid'] = str(uuid.uuid4())
         metadata_group.attrs['source_dataset'] = 'EgoDex'
-        metadata_group.attrs['source_identifier'] = f"{seq_info['task_name']}/{seq_info['sequence_name']}"
+        metadata_group.attrs['source_identifier'] = seq_info['sequence_name']
         
         # Store action label as an attribute (not a dataset) as per the working example
         action_label_raw = f_in.attrs.get('llm_description', 'N/A')
@@ -77,6 +80,7 @@ def process_sequence(seq_info: dict, traj_group: h5py.Group):
             action_label = 'N/A'
         
         metadata_group.attrs['action_label'] = action_label
+        found_streams.add("metadata/action_label")
 
         # --- Timestamps ---
         num_frames = 0
@@ -88,6 +92,7 @@ def process_sequence(seq_info: dict, traj_group: h5py.Group):
         # EgoDex is 30Hz, so timestep is 1/30 seconds. Convert to nanoseconds.
         timestamps_ns = np.arange(num_frames) * (1e9 / 30.0)
         metadata_group.create_dataset("timestamps_ns", data=timestamps_ns.astype(np.uint64))
+        found_streams.add("metadata/timestamps_ns")
 
         # --- Camera Data ---
         camera_group = traj_group.create_group("camera")
@@ -106,6 +111,7 @@ def process_sequence(seq_info: dict, traj_group: h5py.Group):
                 [0., 0., 1.]
             ], dtype=np.float32)
         camera_group.create_dataset("intrinsics", data=intrinsics)
+        found_streams.add("camera/intrinsics")
 
         # Process Camera Data
         camera_transforms = f_in.get("transforms/camera")
@@ -113,6 +119,7 @@ def process_sequence(seq_info: dict, traj_group: h5py.Group):
             raw_camera_poses = camera_transforms[:]
             canonical_camera_poses = arkit_to_canonical_poses(raw_camera_poses)
             camera_group.create_dataset("pose_in_world", data=canonical_camera_poses)
+            found_streams.add("camera/pose_in_world")
 
         # --- Hand Data ---
         hands_group = traj_group.create_group("hands")
@@ -127,6 +134,7 @@ def process_sequence(seq_info: dict, traj_group: h5py.Group):
                 raw_hand_poses = hand_transforms[:]
                 canonical_hand_poses = arkit_to_canonical_poses(raw_hand_poses)
                 hand_group.create_dataset("pose_in_world", data=canonical_hand_poses)
+                found_streams.add(f"hands/{hand}/pose_in_world")
             else:
                 logging.warning(f"No '{source_key}' data found in {seq_info['hdf5_path']}")
 
@@ -185,7 +193,9 @@ def process_sequence(seq_info: dict, traj_group: h5py.Group):
 
                     # Store in canonical format
                     skeleton_group.create_dataset("positions", data=all_positions_canonical.astype(np.float32))
+                    found_streams.add("skeleton/positions")
                     skeleton_group.create_dataset("confidences", data=all_confidences.astype(np.float32))
+                    found_streams.add("skeleton/confidences")
                     
                     logging.info(f"Stored skeleton data: {all_positions_canonical.shape} positions, {all_confidences.shape} confidences")
                 else:
@@ -232,6 +242,7 @@ def process_sequence(seq_info: dict, traj_group: h5py.Group):
             (frame_count, max_frame_size), 
             dtype=np.uint8
         )
+        found_streams.add("rgb/image_bytes")
         
         # Second pass: store frames with padding
         for i, frame_bytes in enumerate(temp_frames):
@@ -247,6 +258,17 @@ def process_sequence(seq_info: dict, traj_group: h5py.Group):
                 f"Number of video frames ({frame_count}) does not match "
                 f"number of pose frames ({num_frames}) in {seq_info['hdf5_path']}"
             )
+
+    # --- Validation Checklist ---
+    print("\n" + "="*80)
+    print(f"VALIDATION CHECKLIST for sequence: {traj_group.name}")
+    print("="*80)
+    for stream in sorted(list(CANONICAL_DATA_STREAMS)):
+        if stream in found_streams:
+            print(f"  [+] Found: {stream}")
+        else:
+            print(f"  [-] Missing: {stream}")
+    print("="*80 + "\n")
 
 
 def main(args):
