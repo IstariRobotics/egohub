@@ -1,0 +1,37 @@
+Custom MIT-Based License with Non-Commercial Restriction and Rights Assignment
+
+Copyright (c) 2025 Istari Robotics
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the “Software”), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, and distribute copies of the Software,
+subject to the following conditions:
+
+1. Non-Commercial Use Only  
+The Software may only be used, copied, modified, and distributed for 
+**non-commercial purposes**. Any use of the Software or derivative works 
+for direct or indirect commercial advantage is strictly prohibited.
+
+2. Grant of Rights to Modified Versions  
+If you create modified versions of the Software and distribute them (publicly 
+or privately), you hereby grant the original copyright holder(s) an 
+**irrevocable, worldwide, royalty-free license** to use, reproduce, modify, 
+distribute, sublicense, and commercialize your modifications, either as a 
+standalone work or incorporated into other software or products, with no 
+obligation to you.
+
+3. Attribution  
+You must retain the above copyright notice,
+this list of conditions, and the following disclaimer in all copies or
+substantial portions of the Software.
+
+DISCLAIMER:
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
