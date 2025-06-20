@@ -186,22 +186,9 @@ print(f'Loaded {len(dataset)} frames from {len(set(idx[0] for idx in dataset.fra
 - [ ] Training utilities
 - [ ] Performance optimization
 
-## 🤝 **Contributing**
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Update documentation
-6. Submit a pull request
 
 ## 📄 **License**
 
 [Add your license information here]
 
-## 🙏 **Acknowledgments**
-
-- **Pablo's Implementation**: Reference implementation for direct EgoDex visualization
-- **EgoDex Dataset**: Original egocentric dataset
-- **Rerun**: 3D visualization framework
-- **PyTorch**: Deep learning framework 
