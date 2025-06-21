@@ -38,30 +38,36 @@ CANONICAL_SCHEMA = {
                 "timestamps_ns": "Synchronized timestamps for all data streams (uint64, in nanoseconds).",
             },
         },
-        "rgb": {
-            "description": "RGB image data.",
-            "datasets": {
-                "image_bytes": "Variable-length dataset of JPG-compressed image bytes.",
-                "frame_indices": "Index mapping timestamps to image frames.",
-            },
-        },
-        "depth": {
-            "description": "Depth map data.",
-            "attributes": {
-                "scale_factor": "Multiplier to convert depth values to meters (e.g., 1000.0 for 16-bit millimeter data)."
-            },
-            "datasets": {
-                "image_bytes": "Variable-length dataset of lossless PNG-compressed 16-bit depth maps.",
-                "frame_indices": "Index mapping timestamps to depth frames.",
-            },
-        },
-        "camera": {
-            "description": "Camera information, including pose and intrinsics.",
-            "datasets": {
-                "pose_in_world": "4x4 homogenous transformation matrix (world <- camera).",
-                "intrinsics": "3x3 pinhole camera intrinsic matrix.",
-                "frame_indices": "Index mapping timestamps to camera data.",
-            },
+        "cameras": {
+            "description": "Group containing data for all cameras.",
+            "{camera_name}": {
+                "description": "Data for a single camera, identified by a unique name.",
+                "attributes": {
+                    "is_ego": "Boolean attribute, true if the camera is egocentric.",
+                },
+                "datasets": {
+                    "pose_in_world": "4x4 homogenous transformation matrix (world <- camera).",
+                    "intrinsics": "3x3 pinhole camera intrinsic matrix.",
+                    "frame_indices": "Index mapping timestamps to camera data.",
+                },
+                "rgb": {
+                    "description": "RGB image data for this camera.",
+                    "datasets": {
+                        "image_bytes": "Variable-length dataset of JPG-compressed image bytes.",
+                        "frame_indices": "Index mapping timestamps to image frames.",
+                    },
+                },
+                "depth": {
+                    "description": "Depth map data for this camera.",
+                    "attributes": {
+                        "scale_factor": "Multiplier to convert depth values to meters (e.g., 1000.0 for 16-bit millimeter data)."
+                    },
+                    "datasets": {
+                        "image": "Dataset of depth images, typically 16-bit.",
+                        "frame_indices": "Index mapping timestamps to depth frames.",
+                    },
+                },
+            }
         },
         "hands": {
             "description": "Hand tracking data.",
@@ -101,13 +107,16 @@ CANONICAL_SCHEMA = {
 }
 
 # A definitive list of all possible canonical data streams for validation.
-CANONICAL_DATA_STREAMS = [
+# This is now a template. '{camera_name}' should be replaced with actual camera names.
+CANONICAL_DATA_STREAMS_TEMPLATE = [
     "metadata/timestamps_ns",
-    "camera/intrinsics",
-    "camera/pose_in_world",
+    "cameras/{camera_name}/intrinsics",
+    "cameras/{camera_name}/pose_in_world",
+    "cameras/{camera_name}/rgb/image_bytes",
+    "cameras/{camera_name}/depth/image",
     "hands/left/pose_in_world",
     "hands/right/pose_in_world",
+    "objects/{object_name}/pose_in_world",
     "skeleton/positions",
     "skeleton/confidences",
-    "rgb/image_bytes",
 ] 

@@ -2,13 +2,17 @@
 
 An end-to-end Python pipeline for ingesting, normalizing, and serving egocentric datasets for humanoid robotics research.
 
-## Core Workflow: Ingest → Re-express → Re-serve
+## Core Workflow: A Hub-and-Spoke Architecture
 
-This project implements a complete pipeline for processing egocentric data:
+This project implements a complete pipeline for processing egocentric data, designed for extensibility.
 
-1. **Ingest**: Read raw, heterogeneous egocentric datasets (currently EgoDex)
-2. **Re-express**: Convert to a canonical HDF5 format with standardized coordinate systems
-3. **Re-serve**: Provide PyTorch datasets and Rerun visualizations for easy access and validation
+1.  **Ingest (Adapters)**: Raw, heterogeneous egocentric datasets (e.g., EgoDex, HOT3D, Ego4D) are converted into a canonical format using dedicated, class-based **Adapters** that inherit from `egohub.adapters.BaseAdapter`.
+2.  **Re-express (Canonical Schema)**: The data is re-expressed into a single, canonical HDF5 format. This schema is multi-camera and multi-modal by design, organizing data by trajectory and then by data stream (e.g., `cameras/{camera_name}/rgb`, `hands/left`).
+3.  **Re-serve (Exporters & Datasets)**: The canonical data is consumed by:
+    *   A unified `egohub.datasets.EgocentricH5Dataset` for PyTorch.
+    *   Modular **Exporters** (inheriting from `egohub.exporters.BaseExporter`) that visualize data in Rerun or prepare it for other applications.
+
+This architecture ensures that adding a new dataset or a new export target only requires adding a new, self-contained Adapter or Exporter class, without modifying the core logic.
 
 ## Quick Start
 
@@ -32,160 +36,100 @@ uv pip install -e .
 
 ### Usage Examples
 
-#### 1. **Canonical Format Pipeline** (Recommended)
-
-Convert EgoDex data to our canonical format and visualize:
+Convert a subset of the EgoDex data to our canonical format and then visualize it with Rerun.
 
 ```bash
-# Convert EgoDex to canonical HDF5 format
+# 1. Convert EgoDex to canonical HDF5 format
+# This runs the EgoDexAdapter, which discovers and processes sequences.
 python scripts/adapters/adapter_egodex.py \
-    --raw_dir data/EgoDex/test/add_remove_lid/ \
-    --output_file data/processed/test_lid.h5
+    --raw_dir path/to/raw/EgoDex \
+    --output_file data/processed/egodex.h5 \
+    --num_sequences 10 # Optional: limit to the first 10 sequences for a quick test
 
-# Visualize the canonical format
-python scripts/visualizers/view_h5_rerun.py \
-    data/processed/test_lid.h5 \
-    --trajectory trajectory_0000 \
-    --max-frames 50
-```
-
-#### 2. **Direct EgoDex Visualization** (Reference Implementation)
-
-Visualize EgoDex data directly without conversion (based on Pablo's working implementation):
-
-```bash
-python scripts/visualizers/view_egodex_direct.py \
-    data/EgoDex/test/add_remove_lid \
-    --max-frames 50
+# 2. Visualize the canonical HDF5 file
+# This runs the RerunExporter.
+python scripts/exporters/export_to_rerun.py data/processed/egodex.h5
 ```
 
 ## Project Structure
 
 ```
 egohub/
-├── egohub/                    # Core library
+├── egohub/                    # Core, installable library
+│   ├── adapters/             # Base classes for data ingestion
+│   │   └── base.py
 │   ├── datasets.py           # PyTorch dataset classes
+│   ├── exporters/            # Base classes for data exporting
+│   │   └── base.py
 │   ├── schema.py             # Canonical HDF5 schema definition
-│   ├── camera_parameters.py  # Camera intrinsics/extrinsics utilities
 │   └── transforms/           # Data transformation utilities
-│       ├── coordinates.py    # Coordinate frame transformations
-│       └── __init__.py
+│       └── coordinates.py
 ├── scripts/
-│   ├── adapters/             # Data format converters
-│   │   └── adapter_egodex.py # EgoDex to canonical format
-│   └── visualizers/          # Rerun visualization scripts
-│       ├── view_h5_rerun.py  # Canonical format visualization
-│       └── view_egodex_direct.py # Direct EgoDex visualization
+│   ├── adapters/             # Executable adapter scripts
+│   │   └── adapter_egodex.py # Converts EgoDex data
+│   └── exporters/            # Executable exporter scripts
+│       └── export_to_rerun.py  # Visualizes data with Rerun
 ├── tests/                    # Test suite
-│   ├── unit/                 # Unit tests
-│   └── integration/          # Integration tests
 └── data/                     # Data storage (gitignored)
-    ├── raw/                  # Raw datasets
-    └── processed/            # Processed canonical format
+    ├── raw/
+    └── processed/
 ```
-
-## Key Features
-
-### **Canonical Data Format**
-- **Standardized HDF5 structure** with consistent coordinate systems
-- **Z-up world frame** with proper camera conventions
-- **Efficient storage** with JPG-encoded video frames
-- **Comprehensive metadata** including action labels and timestamps
-
-### **PyTorch Integration**
-- **`EgocentricH5Dataset`** class for seamless data loading
-- **Global frame indexing** across multiple trajectories
-- **Automatic tensor conversion** and data decoding
-- **Trajectory filtering** and transform support
-
-### **Advanced Visualization**
-- **Rerun-based visualization** with 3D camera poses
-- **Timeline synchronization** across all data streams
-- **Multiple visualization modes** (canonical vs. direct)
-- **Real-time playback** with proper coordinate systems
-
-### **Robust Data Processing**
-- **Coordinate transformations** from ARKit to canonical frame
-- **Error handling** for missing data (hand poses, intrinsics)
-- **Video optimization** with efficient encoding
-- **Comprehensive logging** and validation
 
 ## Canonical Data Schema
 
-Our canonical HDF5 format organizes data into groups, with each group representing a distinct trajectory from a source dataset. All spatial data is in our **right-handed, Z-up** world coordinate frame.
+Our canonical HDF5 format is designed to be flexible and extensible, particularly for multi-camera and multi-modal data. All spatial data is transformed into a single **right-handed, Z-up** world coordinate frame.
 
-The following table details the standardized paths within each trajectory group and their expected data types. It also indicates whether scripts exist to generate a data stream if it's missing from a source dataset.
+Each HDF5 file can contain multiple trajectories, identified as `trajectory_{:04d}`. Within each trajectory, data is organized into logical groups:
 
-| Canonical Path | Data Type & Shape | Description | Generation Script | Generation Dependencies |
-| :--- | :--- | :--- | :--- | :--- |
-| **`metadata/timestamps_ns`** | `uint64` (N,) | Nanosecond timestamps for each frame. | N/A | Frame rate (e.g., 30Hz) |
-| **`camera/intrinsics`** | `float32` (3, 3) | Camera intrinsic matrix (fx, fy, cx, cy). | N/A | - |
-| **`camera/pose_in_world`** | `float32` (N, 4, 4) | 4x4 pose matrix of the camera in the world. | N/A | - |
-| **`rgb/image_bytes`** | `uint8` (N, S) | Variable-length, JPG-encoded image bytes. | N/A | - |
-| **`rgb/frame_sizes`** | `int32` (N,) | Size of each encoded frame in `image_bytes`. | N/A | `rgb/image_bytes` |
-| **`hands/left/pose_in_world`**| `float32` (N, 4, 4) | 4x4 pose of the left hand. | No | - |
-| **`hands/right/pose_in_world`**| `float32` (N, 4, 4) | 4x4 pose of the right hand. | No | - |
-| **`skeleton/joint_names`** | `string[]` (J,) | Attribute list of joint names. | No | - |
-| **`skeleton/positions`** | `float32` (N, J, 3) | 3D position of each joint in the world. | No | - |
-| **`skeleton/confidences`** | `float32` (N, J) | Confidence value for each joint detection. | No | - |
-| **`depth/image`** | `uint16` (N, H, W) | Per-pixel depth image (e.g., in mm). | No | - |
+| Group Path | Description |
+| :--- | :--- |
+| **`metadata/`** | Contains high-level information about the trajectory, such as `uuid`, `source_dataset`, and a synchronized master `timestamps_ns` dataset. |
+| **`cameras/{camera_name}/`** | A group for each camera, where `{camera_name}` is a unique identifier (e.g., `ego_camera_left`, `external_gopro_1`). This is the core of our multi-camera support. |
+| **`hands/{left,right}/`** | Contains data related to hand tracking, such as `pose_in_world` and MANO parameters. |
+| **`objects/{object_name}/`** | Holds data for tracked objects in the scene, including their `pose_in_world`. |
+| **`skeleton/`** | Stores full-body skeleton tracking data, like joint `positions` and `confidences`. |
+| **`imu/`** | Placeholder for raw Inertial Measurement Unit data. |
+| **`gaze/`** | Placeholder for eye gaze tracking data. |
 
-_**Notes:** N = number of frames, S = max encoded image size, J = number of joints, H/W = image height/width._
+### Example: Camera Data Structure
+
+Within each `cameras/{camera_name}/` group, the data is further organized. This structure ensures all data associated with a single camera is co-located.
+
+| Path within `cameras/{camera_name}/` | Data Type & Shape | Description |
+| :--- | :--- | :--- |
+| `pose_in_world` | `float32` (N, 4, 4) | 4x4 pose matrix of this camera in the world frame. |
+| `intrinsics` | `float32` (3, 3) | 3x3 pinhole camera intrinsic matrix. |
+| `rgb/image_bytes` | `uint8` (N, S) | JPG-encoded RGB image bytes. |
+| `depth/image` | `uint16` (N, H, W) | Per-pixel depth images. |
 
 ## Coordinate Systems
 
-- **World Frame**: Right-handed, Z-up, Y-forward, X-right (meters)
-- **Camera Frame**: Standard OpenCV model (Z-forward, Y-down, X-right)
-- **Transformations**: Automatic conversion from ARKit to canonical frame
+- **World Frame**: Right-handed, Z-up, Y-forward, X-right (units are in meters).
+- **Camera Frame**: Standard OpenCV model (Z-forward, Y-down, X-right).
+- **Transformations**: Poses are stored as `T_world_local`, representing the transform from the entity's local frame to the world frame.
 
 ## Testing
 
 ```bash
-# Run unit tests
-pytest tests/unit/
-
-# Run integration tests
-pytest tests/integration/
-
-# Test data loading
-python -c "
-from egohub.datasets import EgocentricH5Dataset
-dataset = EgocentricH5Dataset('data/processed/test_lid.h5')
-print(f'Loaded {len(dataset)} frames from {len(set(idx[0] for idx in dataset.frame_index))} trajectories')
-"
+# Run all tests
+pytest
 ```
-
-## Comparison: Canonical vs. Direct Approaches
-
-| Feature | Canonical Format | Direct EgoDex |
-|---------|------------------|---------------|
-| **Data Portability** | Universal format | EgoDex-specific |
-| **Coordinate Systems** | Standardized | Original format |
-| **Performance** | Optimized storage | Original size |
-| **Extensibility** | Easy to add datasets | Hard to extend |
-| **Validation** | End-to-end tested | Reference implementation |
 
 ## Development Status
 
 ### Completed
-- [x] EgoDex adapter with coordinate transformations
-- [x] Canonical HDF5 format with proper schema
-- [x] PyTorch dataset class with global indexing
-- [x] Rerun visualization for canonical format
-- [x] Direct EgoDex visualization (reference)
-- [x] Camera parameter utilities
-- [x] Comprehensive testing framework
+- [x] **Core Architectural Refactor**: Implemented a hub-and-spoke model with base classes for adapters and exporters.
+- [x] **Multi-Camera Schema**: The HDF5 schema now supports arbitrary numbers of cameras and modalities.
+- [x] **EgoDex Adapter**: A class-based adapter for the EgoDex dataset.
+- [x] **Rerun Exporter**: A class-based exporter for robust Rerun visualization.
+- [x] **PyTorch `EgocentricH5Dataset`**: Fully refactored for the new multi-camera schema.
+- [x] Camera parameter and coordinate transform utilities.
+- [x] Comprehensive testing framework setup.
 
-### In Progress
-- [ ] Depth data support
-- [ ] Hand mesh reconstruction
-- [ ] Additional dataset adapters
-- [ ] Advanced visualization features
-
-### Planned
-- [ ] Real-time data streaming
-- [ ] Multi-modal fusion
-- [ ] Training utilities
-- [ ] Performance optimization
+### Next Steps
+- [ ] Implement adapter for **HOT3D** dataset.
+- [ ] Implement adapter for **Ego4D** dataset.
+- [ ] Add depth data processing to the EgoDex adapter.
+- [ ] Add hand mesh reconstruction support to the Rerun exporter.
 
 
