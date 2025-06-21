@@ -2,8 +2,7 @@
 
 An end-to-end Python pipeline for ingesting, normalizing, and serving egocentric datasets for humanoid robotics research.
 
-## Core Workflow: A Hub-and-Spoke Architecture
-
+## Core
 This project implements a complete pipeline for processing egocentric data, designed for extensibility.
 
 1.  **Ingest (Adapters)**: Raw, heterogeneous egocentric datasets (e.g., EgoDex, HOT3D, Ego4D) are converted into a canonical format using dedicated, class-based **Adapters** that inherit from `egohub.adapters.BaseAdapter`.
