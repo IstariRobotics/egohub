@@ -66,9 +66,7 @@ egohub/
 │       └── coordinates.py
 ├── scripts/
 │   ├── adapters/             # Executable adapter scripts
-│   │   └── adapter_egodex.py # Converts EgoDex data
 │   └── exporters/            # Executable exporter scripts
-│       └── export_to_rerun.py  # Visualizes data with Rerun
 ├── tests/                    # Test suite
 └── data/                     # Data storage (gitignored)
     ├── raw/
