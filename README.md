@@ -113,21 +113,4 @@ Within each `cameras/{camera_name}/` group, the data is further organized. This 
 pytest
 ```
 
-## Development Status
-
-### Completed
-- [x] **Core Architectural Refactor**: Implemented a hub-and-spoke model with base classes for adapters and exporters.
-- [x] **Multi-Camera Schema**: The HDF5 schema now supports arbitrary numbers of cameras and modalities.
-- [x] **EgoDex Adapter**: A class-based adapter for the EgoDex dataset.
-- [x] **Rerun Exporter**: A class-based exporter for robust Rerun visualization.
-- [x] **PyTorch `EgocentricH5Dataset`**: Fully refactored for the new multi-camera schema.
-- [x] Camera parameter and coordinate transform utilities.
-- [x] Comprehensive testing framework setup.
-
-### Next Steps
-- [ ] Implement adapter for **HOT3D** dataset.
-- [ ] Implement adapter for **Ego4D** dataset.
-- [ ] Add depth data processing to the EgoDex adapter.
-- [ ] Add hand mesh reconstruction support to the Rerun exporter.
-
 
