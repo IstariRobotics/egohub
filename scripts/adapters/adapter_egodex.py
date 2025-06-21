@@ -292,6 +292,10 @@ def main(args):
         logging.warning("No sequences found. Exiting.")
         return
 
+    if args.num_sequences is not None and args.num_sequences > 0:
+        sequences = sequences[:args.num_sequences]
+        logging.info(f"Limiting processing to the first {len(sequences)} sequence(s).")
+
     logging.info(f"Input directory: {raw_dir}")
     logging.info(f"Output file: {output_file}")
     
@@ -325,6 +329,12 @@ if __name__ == '__main__':
         type=str,
         required=True,
         help="Path to the output HDF5 file."
+    )
+    parser.add_argument(
+        '--num_sequences',
+        type=int,
+        default=None,
+        help="Number of sequences to process. If not specified, all sequences are processed."
     )
     args = parser.parse_args()
     main(args) 
