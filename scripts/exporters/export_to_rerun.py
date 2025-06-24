@@ -179,7 +179,8 @@ class RerunExporter(BaseExporter):
             frame_data = dataset[i]
             
             # Set timeline
-            rr.set_time_sequence("frame", i)
+            rr.set_time(sequence="frame",
+                        nanos=int(frame_data['timestamp_ns']))
 
             # Log data for each camera
             for cam_name in camera_names:
@@ -230,14 +231,24 @@ class RerunExporter(BaseExporter):
                                 f"world/skeleton/labels/{i}",
                                 rr.TextDocument(f"{name}: {conf:.2f}")
                             )
-            
-            if 'timestamp_ns' in frame_data:
-                timestamp = frame_data['timestamp_ns'].item()
-                rr.set_time_nanos("timestamp", timestamp)
         
         logger.info(f"Visualization complete! Check the Rerun viewer.")
 
 
-if __name__ == "__main__":
+def run_from_main():
+    """The main entry point, parsing arguments and running the exporter."""
+    # This is slightly convoluted to allow for Sphinx documentation generation.
     exporter = RerunExporter()
-    exporter.run_from_main() 
+    parser = exporter.get_arg_parser()
+    args = parser.parse_args()
+    
+    # Configure logging based on verbosity
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(message)s')
+    
+    # Run the exporter
+    exporter.run(args)
+
+
+if __name__ == "__main__":
+    run_from_main() 
