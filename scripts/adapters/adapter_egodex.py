@@ -284,31 +284,20 @@ class EgoDexAdapter(BaseAdapter):
                 print(f"  [-] Missing: {stream}")
         print("="*80 + "\n")
 
+        logging.info(f"Finished processing sequence. Found streams: {sorted(list(found_streams))}")
+
+
+def main():
+    """Main function to run the adapter."""
+    parser = argparse.ArgumentParser(description="Convert EgoDex data to canonical HDF5 format.")
+    parser.add_argument('--raw_dir', type=Path, required=True, help="Path to the raw EgoDex dataset directory.")
+    parser.add_argument('--output_file', type=Path, required=True, help="Path to the output HDF5 file.")
+    parser.add_argument('--num_sequences', type=int, default=None, help="Number of sequences to process.")
+    args = parser.parse_args()
+
+    adapter = EgoDexAdapter(raw_dir=args.raw_dir, output_file=args.output_file)
+    adapter.run(num_sequences=args.num_sequences)
+
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Convert EgoDex dataset to canonical HDF5 format.")
-    parser.add_argument(
-        '--raw_dir',
-        type=str,
-        required=True,
-        help="Path to the root directory of the raw EgoDex dataset."
-    )
-    parser.add_argument(
-        '--output_file',
-        type=str,
-        required=True,
-        help="Path to the output HDF5 file."
-    )
-    parser.add_argument(
-        '--num_sequences',
-        type=int,
-        default=None,
-        help="Number of sequences to process. If not specified, all sequences are processed."
-    )
-    args = parser.parse_args()
-    
-    adapter = EgoDexAdapter(
-        raw_dir=Path(args.raw_dir),
-        output_file=Path(args.output_file),
-    )
-    adapter.run(num_sequences=args.num_sequences) 
+    main() 
