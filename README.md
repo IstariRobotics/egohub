@@ -1,6 +1,6 @@
 # Egocentric Data Hub (egohub)
 
-An end-to-end Python pipeline for ingesting, normalizing, and serving egocentric datasets for humanoid robotics research.
+An end-to-end Python pipeline for ingesting, normalizing, and serving egocentric datasets for humanoid robotics research in a unified state and action format.
 
 ## Core
 This project implements a complete pipeline for processing egocentric data, designed for extensibility.
