@@ -104,34 +104,42 @@ uv pip install -e .
 Convert a subset of the EgoDex data to our canonical format and then visualize it with Rerun.
 
 ```bash
-# 1. Convert EgoDex to canonical HDF5 format
-# This runs the EgoDexAdapter, which discovers and processes sequences.
-python scripts/adapters/adapter_egodex.py \
-    --raw_dir path/to/raw/EgoDex \
-    --output_file data/processed/egodex.h5 \
-    --num_sequences 10 # Optional: limit to the first 10 sequences for a quick test
+# 1. Convert EgoDex to canonical HDF5 format using the unified CLI
+# This runs the EgoDexAdapter through our new, extensible command-line interface.
+egohub convert egodex \
+    --raw-dir path/to/raw/EgoDex \
+    --output-file data/processed/egodex.h5 \
+    --num-sequences 10 # Optional: limit for a quick test
 
 # 2. Visualize the canonical HDF5 file
-# This runs the RerunExporter.
-python scripts/exporters/export_to_rerun.py data/processed/egodex.h5
+# This runs the RerunExporter via the 'visualize' subcommand.
+egohub visualize data/processed/egodex.h5 --max-frames 100
 ```
+
+## Supported Datasets
+
+This table lists the datasets currently supported by `egohub`. We welcome contributions for new adapters! See `CONTRIBUTING.md` for a guide on how to add one.
+
+| Dataset Name | CLI Identifier | Adapter Class | Notes |
+| :--- | :--- | :--- | :--- |
+| **EgoDex** | `egodex` | `EgoDexAdapter` | Supports video, camera pose, and hand/skeleton poses. |
 
 ## Project Structure
 
 ```
 egohub/
 ├── egohub/                    # Core, installable library
-│   ├── adapters/             # Base classes for data ingestion
+│   ├── adapters/             # Data ingestion classes (EgoDexAdapter, etc.)
 │   │   └── base.py
+│   ├── cli/                  # Argparse-based CLI application
+│   │   └── main.py
 │   ├── datasets.py           # PyTorch dataset classes
-│   ├── exporters/            # Base classes for data exporting
-│   │   └── base.py
+│   ├── exporters/            # Data exporting classes (RerunExporter, etc.)
+│   │   └── rerun.py
 │   ├── schema.py             # Canonical HDF5 schema definition
 │   └── transforms/           # Data transformation utilities
-│       └── coordinates.py
-├── scripts/
-│   ├── adapters/             # Executable adapter scripts
-│   └── exporters/            # Executable exporter scripts
+│       ├── coordinates.py
+│       └── pipeline.py
 ├── tests/                    # Test suite
 └── data/                     # Data storage (gitignored)
     ├── raw/
