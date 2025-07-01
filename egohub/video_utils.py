@@ -193,7 +193,7 @@ def reencode_video_optimal(
         str(input_video_path),
     ])
 
-    # Try AV1 NVENC first (Pablo's preferred method)
+    # Try AV1 NVENC first
     cmd_encoder_specific: list[str] = [
         "-c:v",
         "av1_nvenc",
