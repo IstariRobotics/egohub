@@ -179,8 +179,7 @@ class RerunExporter(BaseExporter):
             frame_data = dataset[i]
             
             # Set timeline
-            rr.set_time(sequence="frame",
-                        nanos=int(frame_data['timestamp_ns']))
+            rr.set_time("frame", timestamp=int(frame_data['timestamp_ns']))
 
             # Log data for each camera
             for cam_name in camera_names:
@@ -236,18 +235,7 @@ class RerunExporter(BaseExporter):
 
 
 def run_from_main():
-    """The main entry point, parsing arguments and running the exporter."""
-    # This is slightly convoluted to allow for Sphinx documentation generation.
-    exporter = RerunExporter()
-    parser = exporter.get_arg_parser()
-    args = parser.parse_args()
-    
-    # Configure logging based on verbosity
-    log_level = logging.DEBUG if args.verbose else logging.INFO
-    logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(message)s')
-    
-    # Run the exporter
-    exporter.run(args)
+    RerunExporter().run_from_main()
 
 
 if __name__ == "__main__":
