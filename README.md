@@ -13,6 +13,72 @@ This project implements a complete pipeline for processing egocentric data, desi
 
 This architecture ensures that adding a new dataset or a new export target only requires adding a new, self-contained Adapter or Exporter class, without modifying the core logic.
 
+## Architectural Diagram
+
+```mermaid
+graph TD
+    subgraph "1. Raw Data Sources"
+        direction LR
+        RawVideo["Dataset A<br/>(e.g., Video Only)"]
+        RawWithPose["Dataset B<br/>(e.g., Video + Hand Poses)"]
+    end
+
+    subgraph "2. Ingestion Adapters"
+        direction LR
+        AdapterA["Adapter for A"]
+        AdapterB["Adapter for B"]
+    end
+
+    subgraph "4. Enrichment Toolbox"
+        direction TB
+        ToolHand["Hand Pose Estimator"]
+        ToolDepth["Depth Estimator"]
+        ToolSeg["Video Segmenter"]
+        ToolLabel["Action Labeler (VLM)"]
+    end
+
+    subgraph "5. Downstream Applications"
+        direction LR
+        AppPytorch["PyTorch Dataset"]
+        AppRerun["Rerun Visualizer"]
+        AppSim["Robotics Simulator"]
+    end
+
+    CanonicalH5["3. Canonical HDF5 File<br/>(The 'Single Source of Truth')"]
+
+    %% Define flow
+    RawVideo --> AdapterA
+    RawWithPose --> AdapterB
+    AdapterA --> CanonicalH5
+    AdapterB --> CanonicalH5
+
+    CanonicalH5 -- "Reads video stream" --> ToolHand
+    ToolHand -- "Writes hand poses" --> CanonicalH5
+    
+    CanonicalH5 -- "Reads video stream" --> ToolDepth
+    ToolDepth -- "Writes depth maps" --> CanonicalH5
+
+    CanonicalH5 -- "Reads data" --> ToolSeg & ToolLabel
+    ToolSeg & ToolLabel -- "Writes new data" --> CanonicalH5
+
+    CanonicalH5 --> AppPytorch
+    CanonicalH5 --> AppRerun
+    CanonicalH5 --> AppSim
+
+    %% Styling
+    classDef raw fill:#e6e6fa,stroke:#333,stroke-width:2px;
+    classDef adapter fill:#d4edda,stroke:#333,stroke-width:2px;
+    classDef canonical fill:#ffeeba,stroke:#ff9900,stroke-width:4px;
+    classDef tool fill:#cce5ff,stroke:#333,stroke-width:2px;
+    classDef app fill:#f8d7da,stroke:#333,stroke-width:2px;
+
+    class RawVideo,RawWithPose raw;
+    class AdapterA,AdapterB adapter;
+    class CanonicalH5 canonical;
+    class ToolHand,ToolDepth,ToolSeg,ToolLabel tool;
+    class AppPytorch,AppRerun,AppSim app;
+```
+
 ## Quick Start
 
 ### Prerequisites
