@@ -44,6 +44,9 @@ full = [
 "Homepage" = "https://github.com/your-repo/egohub"
 "Bug Tracker" = "https://github.com/your-repo/egohub/issues"
 
+[project.scripts]
+egohub = "egohub.cli.main:main"
+
 [tool.setuptools.packages.find]
 include = ["egohub*"]
 

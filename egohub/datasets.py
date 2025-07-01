@@ -3,6 +3,8 @@ PyTorch Dataset classes for loading egocentric data from canonical HDF5 format.
 
 This module provides the main interface for accessing processed egocentric datasets
 in a PyTorch-compatible format.
+
+# pyright: reportGeneralTypeIssues=false, reportIncompatibleMethodOverride=false
 """
 
 import logging
@@ -14,9 +16,26 @@ import h5py
 import numpy as np
 import torch
 from torch.utils.data import Dataset
+from abc import ABC, abstractmethod
 
 
-class EgocentricH5Dataset(Dataset):
+class BaseDatasetReader(Dataset, ABC):
+    """Abstract base class defining the required interface for dataset readers."""
+
+    @abstractmethod
+    def __len__(self) -> int:  # noqa: D401
+        """Return total number of samples in the dataset."""
+
+    @abstractmethod
+    def __getitem__(self, idx: int):  # noqa: D401
+        """Return the sample at the given index."""
+
+    @abstractmethod
+    def get_metadata(self):  # noqa: D401
+        """Return dataset-level metadata useful for diagnostics or training."""
+
+
+class EgocentricH5Dataset(BaseDatasetReader):
     """
     PyTorch Dataset for loading egocentric data from canonical HDF5 files.
     
@@ -93,12 +112,12 @@ class EgocentricH5Dataset(Dataset):
         frame_index = []
         
         with h5py.File(self.h5_path, 'r') as f:
-            all_trajectories = sorted([name for name in f.keys() if name.startswith('trajectory_')])
+            all_trajectories = sorted([name for name in f.keys() if name.startswith('trajectory_')])  # type: ignore[attr-defined]
             
             available_trajectories = trajectories if trajectories is not None else all_trajectories
             
             for traj_name in available_trajectories:
-                if traj_name not in f:
+                if traj_name not in f:  # type: ignore[operator]
                     logging.warning(f"Requested trajectory '{traj_name}' not found, skipping.")
                     continue
                 
@@ -112,7 +131,7 @@ class EgocentricH5Dataset(Dataset):
                 # Use the first configured camera stream to determine frame count
                 main_camera = self.camera_streams[0]
                 pose_path = f"cameras/{main_camera}/pose_in_world"
-                if pose_path in traj_group:
+                if pose_path in traj_group:  # type: ignore[operator]
                     num_frames = traj_group[pose_path].shape[0]
                 elif 'metadata/timestamps_ns' in traj_group:
                     num_frames = traj_group['metadata/timestamps_ns'].shape[0]
@@ -190,7 +209,7 @@ class EgocentricH5Dataset(Dataset):
             
             for hand in ['left', 'right']:
                 hand_key = f'hands/{hand}/pose_in_world'
-                if hand_key in traj_group:
+                if hand_key in traj_group:  # type: ignore[operator]
                     pose = traj_group[hand_key][frame_idx]
                     result[f'{hand}_hand_pose'] = torch.from_numpy(pose).float()
             
@@ -215,7 +234,7 @@ class EgocentricH5Dataset(Dataset):
         info = {}
         
         with h5py.File(self.h5_path, 'r') as f:
-            for traj_name in f.keys():
+            for traj_name in f.keys():  # type: ignore[attr-defined]
                 if not traj_name.startswith('trajectory_'):
                     continue
                 
@@ -235,3 +254,11 @@ class EgocentricH5Dataset(Dataset):
                 info[traj_name] = traj_info
         
         return info 
+
+    # ---------------------------------------------------------------------
+    # Implementation of BaseDatasetReader required API
+    # ---------------------------------------------------------------------
+
+    def get_metadata(self) -> Dict[str, Dict]:
+        """Alias for get_trajectory_info to satisfy the uniform API."""
+        return self.get_trajectory_info() 
