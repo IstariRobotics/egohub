@@ -140,7 +140,7 @@ egohub/
 
 ## Canonical Data Schema
 
-Our canonical HDF5 format is designed to be flexible and extensible, particularly for multi-camera and multi-modal data. All spatial data is transformed into a single **right-handed, Z-up** world coordinate frame.
+Our canonical HDF5 format is designed to be flexible and extensible, particularly for multi-camera and multi-modal data. All spatial data is transformed into a single **right-handed, Z-up** world coordinate frame. Our plan is to continue to build upon this file format and standard as we introduce and incorporate more egocentric (and exocentric) datasets into the library - building a rich standardization framework for a unified 'rig' of human to robot data.
 
 Each HDF5 file can contain multiple trajectories, identified as `trajectory_{:04d}`. Within each trajectory, data is organized into logical groups:
 
