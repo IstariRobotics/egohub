@@ -17,19 +17,19 @@ This architecture ensures that adding a new dataset or a new export target only 
 
 ```mermaid
 graph TD
-    subgraph Raw_Data_Sources
+    subgraph RawDataSources
         direction LR
-        RawVideo[Dataset A (Video Only)]
-        RawWithPose[Dataset B (Video + Hand Poses)]
+        A[Dataset A: Video Only]
+        B[Dataset B: Video + Hand Poses]
     end
 
-    subgraph Ingestion_Adapters
+    subgraph IngestionAdapters
         direction LR
         AdapterA[Adapter for A]
         AdapterB[Adapter for B]
     end
 
-    subgraph Enrichment_Toolbox
+    subgraph EnrichmentToolbox
         direction TB
         ToolHand[Hand Pose Estimator]
         ToolDepth[Depth Estimator]
@@ -37,17 +37,17 @@ graph TD
         ToolLabel[Action Labeler VLM]
     end
 
-    subgraph Downstream_Applications
+    subgraph DownstreamApplications
         direction LR
         AppPytorch[PyTorch Dataset]
         AppRerun[Rerun Visualizer]
         AppSim[Robotics Simulator]
     end
 
-    CanonicalH5[Canonical HDF5 File (Single Source of Truth)]
+    CanonicalH5[Canonical HDF5 File]
 
-    RawVideo --> AdapterA
-    RawWithPose --> AdapterB
+    A --> AdapterA
+    B --> AdapterB
     AdapterA --> CanonicalH5
     AdapterB --> CanonicalH5
 
