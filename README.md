@@ -99,14 +99,12 @@ Convert a subset of the EgoDex data to our canonical format and then visualize i
 
 ```bash
 # 1. Convert EgoDex to canonical HDF5 format using the unified CLI
-# This runs the EgoDexAdapter through our new, extensible command-line interface.
 egohub convert egodex \
     --raw-dir path/to/raw/EgoDex \
     --output-file data/processed/egodex.h5 \
     --num-sequences 10 # Optional: limit for a quick test
 
 # 2. Visualize the canonical HDF5 file
-# This runs the RerunExporter via the 'visualize' subcommand.
 egohub visualize data/processed/egodex.h5 --max-frames 100
 ```
 
