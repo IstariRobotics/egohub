@@ -26,6 +26,7 @@ def main():
     parser_visualize = subparsers.add_parser("visualize", help="Visualize an HDF5 file using the Rerun viewer.")
     parser_visualize.add_argument("h5_path", type=Path, help="The path to the canonical HDF5 file.")
     parser_visualize.add_argument("--max-frames", type=int, help="Optional maximum number of frames to visualize.")
+    parser_visualize.add_argument("--camera-streams", nargs='+', help="Optional list of camera streams to visualize (e.g., ego_camera_left ego_camera_right). Defaults to the first one found.")
 
     args = parser.parse_args()
 
@@ -34,7 +35,7 @@ def main():
         adapter = adapter_class(args.raw_dir, args.output_file)
         adapter.run(num_sequences=args.num_sequences)
     elif args.command == "visualize":
-        dataset = EgocentricH5Dataset(args.h5_path)
+        dataset = EgocentricH5Dataset(args.h5_path, camera_streams=args.camera_streams)
         exporter = RerunExporter(max_frames=args.max_frames)
         exporter.export(dataset)
 
