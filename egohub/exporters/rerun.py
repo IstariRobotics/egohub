@@ -47,7 +47,7 @@ class RerunExporter:
         
         for i in range(frame_range):
             logger.info(f"Processing frame {i+1}/{frame_range}")
-            self._log_temporal_data(dataset[i], camera_names)
+            self._log_temporal_data(i, dataset[i], camera_names)
         
         logger.info("Visualization complete! Check the Rerun viewer.")
 
@@ -94,8 +94,9 @@ class RerunExporter:
                     camera_xyz=rr.ViewCoordinates.RDF,
                 ), static=True)
 
-    def _log_temporal_data(self, frame_data: dict, camera_names: list[str]):
-        rr.set_time("frame", timestamp=int(frame_data['timestamp_ns']))
+    def _log_temporal_data(self, frame_num: int, frame_data: dict, camera_names: list[str]):
+        rr.set_time_sequence("frame", frame_num)
+
         for cam_name in camera_names:
             cam_path = Path("world/cameras") / cam_name
             if cam_name in frame_data.get('camera_pose', {}):
