@@ -17,55 +17,61 @@ This architecture ensures that adding a new dataset or a new export target only 
 
 ```mermaid
 graph TD
-    subgraph RawDataSources
+    %% Define Styles
+    classDef built fill:#d4edda,stroke:#155724,stroke-width:2px
+    classDef notBuilt fill:#f8f9fa,stroke:#6c757d,stroke-width:2px,stroke-dasharray: 5 5
+
+    subgraph RawDataSources [Raw Data Sources]
         direction LR
-        A[Dataset A: Video Only]
-        B[Dataset B: Video + Hand Poses]
+        B["Dataset B: EgoDex<br/>(Video + Hand Poses)"]
     end
 
-    subgraph IngestionAdapters
+    subgraph IngestionAdapters [Ingestion Adapters]
         direction LR
-        AdapterA[Adapter for A]
-        AdapterB[Adapter for B]
+        AdapterB["EgoDex Adapter"]
     end
 
-    subgraph EnrichmentToolbox
+    subgraph EnrichmentToolbox [Enrichment Toolbox - Future Work]
         direction TB
-        ToolHand[Hand Pose Estimator]
-        ToolDepth[Depth Estimator]
-        ToolSeg[Video Segmenter]
-        ToolLabel[Action Labeler VLM]
+        ToolHand["Hand Pose Estimator"]
+        ToolDepth["Depth Estimator"]
+        ToolSeg["Video Segmenter"]
+        ToolLabel["Action Labeler VLM"]
     end
 
-    subgraph DownstreamApplications
+    subgraph DownstreamApplications [Downstream Applications]
         direction LR
-        AppPytorch[PyTorch Dataset]
-        AppRerun[Rerun Visualizer]
-        AppSim[Robotics Simulator]
+        AppPytorch["PyTorch Dataset"]
+        AppRerun["Rerun Visualizer"]
+        AppSim["Robotics Simulator"]
     end
 
-    CanonicalH5[Canonical HDF5 File]
+    CanonicalH5["Canonical HDF5 File"]
 
-    A --> AdapterA
+    %% Define Flows
     B --> AdapterB
-    AdapterA --> CanonicalH5
     AdapterB --> CanonicalH5
 
-    CanonicalH5 -->|Reads video stream| ToolHand
-    ToolHand -->|Writes hand poses| CanonicalH5
+    CanonicalH5 -->|Reads video| ToolHand
+    ToolHand -->|Writes poses| CanonicalH5
 
-    CanonicalH5 -->|Reads video stream| ToolDepth
-    ToolDepth -->|Writes depth maps| CanonicalH5
+    CanonicalH5 -->|Reads video| ToolDepth
+    ToolDepth -->|Writes depth| CanonicalH5
 
     CanonicalH5 -->|Reads data| ToolSeg
     CanonicalH5 -->|Reads data| ToolLabel
-    ToolSeg -->|Writes new data| CanonicalH5
-    ToolLabel -->|Writes new data| CanonicalH5
+    ToolSeg -->|Writes data| CanonicalH5
+    ToolLabel -->|Writes data| CanonicalH5
 
     CanonicalH5 --> AppPytorch
     CanonicalH5 --> AppRerun
     CanonicalH5 --> AppSim
+
+    %% Apply Styles to Nodes
+    class B,AdapterB,CanonicalH5,AppPytorch,AppRerun built
+    class ToolHand,ToolDepth,ToolSeg,ToolLabel,AppSim notBuilt
 ```
+_Completed modules marked in green; future work marked in grey._
 
 ## Quick Start
 
