@@ -18,14 +18,21 @@ class RerunExporter:
     def __init__(self, max_frames: int | None = None):
         self.max_frames = max_frames
 
-    def export(self, dataset: EgocentricH5Dataset):
+    def export(self, dataset: EgocentricH5Dataset, output_path: Path | None = None):
         """
         Visualize HDF5 data using Rerun.
         
         Args:
             dataset: The loaded EgocentricH5Dataset instance.
+            output_path: Optional path to save the RRD data to.
         """
-        rr.init("egocentric-h5-viewer", spawn=True)
+        if output_path:
+            rr.init("egocentric-h5-viewer", spawn=False)
+            rr.save(str(output_path))
+            logger.info(f"Rerun data will be saved to {output_path}")
+        else:
+            rr.init("egocentric-h5-viewer", spawn=True)
+            logger.info("Rerun viewer will spawn automatically.")
         
         if len(dataset) == 0:
             logger.error("No data found in the specified dataset/trajectories")
