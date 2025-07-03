@@ -27,6 +27,7 @@ dependencies = [
     "pyserde>=0.20.0",
     "tyro>=0.9.1",
     "pandas>=2.0.0",
+    "torchvision>=0.15.0",
 ]
 
 [project.optional-dependencies]

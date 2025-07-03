@@ -7,6 +7,7 @@ in a PyTorch-compatible format.
 # pyright: reportGeneralTypeIssues=false, reportIncompatibleMethodOverride=false
 """
 
+from __future__ import annotations
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
@@ -262,3 +263,75 @@ class EgocentricH5Dataset(BaseDatasetReader):
     def get_metadata(self) -> Dict[str, Dict]:
         """Alias for get_trajectory_info to satisfy the uniform API."""
         return self.get_trajectory_info() 
+
+class LatentSequenceDataset(Dataset):
+    """
+    PyTorch Dataset for loading sequences of latent vectors from HDF5 files.
+    
+    This dataset is designed for Stage 2 of the pre-training pipeline. It loads
+    fixed-length sequences of latent vectors to be used for training temporal models
+    like Transformers or LSTMs.
+    
+    Args:
+        h5_path: Path to the HDF5 file containing latent vectors.
+        sequence_length: The length of the latent vector sequences to return.
+        trajectories: Optional list of trajectory names to include. If None, includes all.
+    """
+    
+    def __init__(
+        self, 
+        h5_path: Union[str, Path], 
+        sequence_length: int,
+        trajectories: Optional[List[str]] = None
+    ):
+        self.h5_path = Path(h5_path)
+        self.sequence_length = sequence_length
+        
+        if not self.h5_path.exists():
+            raise FileNotFoundError(f"HDF5 file not found: {self.h5_path}")
+        
+        # Build an index of valid start points for sequences
+        self.sequence_index = self._build_sequence_index(trajectories)
+        
+        logging.info(
+            f"Loaded LatentSequenceDataset from {self.h5_path} with "
+            f"{len(self.sequence_index)} total sequences of length {self.sequence_length}"
+        )
+
+    def _build_sequence_index(self, trajectories: Optional[List[str]]) -> List[Tuple[str, int]]:
+        """
+        Build an index of (trajectory, start_frame_idx) for valid sequences.
+        """
+        sequence_index = []
+        with h5py.File(self.h5_path, 'r') as f:
+            all_trajectories = sorted([name for name in f.keys() if name.startswith('trajectory_')])
+            
+            available_trajectories = trajectories if trajectories is not None else all_trajectories
+            
+            for traj_name in available_trajectories:
+                if traj_name not in f:
+                    logging.warning(f"Requested trajectory '{traj_name}' not found, skipping.")
+                    continue
+                
+                if 'latent/mean' in f[f"{traj_name}"]:
+                    num_latents = f[f"{traj_name}/latent/mean"].shape[0]
+                    # We can start a sequence from any frame that allows a full sequence to be formed
+                    for i in range(num_latents - self.sequence_length + 1):
+                        sequence_index.append((traj_name, i))
+                else:
+                    logging.warning(f"No latents found for trajectory '{traj_name}', skipping.")
+        
+        return sequence_index
+
+    def __len__(self) -> int:
+        return len(self.sequence_index)
+
+    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+        traj_name, start_idx = self.sequence_index[idx]
+        
+        with h5py.File(self.h5_path, 'r') as f:
+            latents = f[f"{traj_name}/latent/mean"][start_idx : start_idx + self.sequence_length]
+            
+        return {
+            'sequence': torch.from_numpy(latents).float()
+        } 
