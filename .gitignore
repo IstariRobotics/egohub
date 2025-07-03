@@ -67,6 +67,9 @@ data/
 *.mp4
 *.zip
 *.tar.gz
+data/processed/
+data/checkpoints/
+*.pth
 
 # IDE
 .idea/
@@ -197,9 +200,6 @@ cython_debug/
 
 # Mac
 .DS_Store
-
-# Data files
-data/
 
 # Project-specific
 projectplan.md
