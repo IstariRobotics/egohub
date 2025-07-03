@@ -27,6 +27,7 @@ def main():
     parser_visualize.add_argument("h5_path", type=Path, help="The path to the canonical HDF5 file.")
     parser_visualize.add_argument("--max-frames", type=int, help="Optional maximum number of frames to visualize.")
     parser_visualize.add_argument("--camera-streams", nargs='+', help="Optional list of camera streams to visualize (e.g., ego_camera_left ego_camera_right). Defaults to the first one found.")
+    parser_visualize.add_argument("--output-rrd", type=Path, help="Optional path to save the RRD data to instead of spawning the viewer.")
 
     args = parser.parse_args()
 
@@ -37,7 +38,7 @@ def main():
     elif args.command == "visualize":
         dataset = EgocentricH5Dataset(args.h5_path, camera_streams=args.camera_streams)
         exporter = RerunExporter(max_frames=args.max_frames)
-        exporter.export(dataset)
+        exporter.export(dataset, output_path=args.output_rrd)
 
 if __name__ == "__main__":
     main() 
