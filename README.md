@@ -1,4 +1,10 @@
-# Egocentric Data Hub (egohub)
+<div align="center">
+  <pre>
+┌─┐┌─┐┌─┐┬ ┬┬ ┬┌┐ 
+├┤ │ ┬│ │├─┤│ │├┴┐
+└─┘└─┘└─┘┴ ┴└─┘└─┘
+  </pre>
+</div>
 
 An end-to-end Python pipeline for ingesting, normalizing, and serving egocentric datasets for humanoid robotics research in a unified state and action format.
 
@@ -134,7 +140,7 @@ egohub visualize data/processed/egodex.h5
 
 ### End-to-End Example: EgoDex
 
-This example walks through the full pipeline for a single sequence from the EgoDex dataset, from raw data to visualization.
+This example walks through the full pipeline for a single sequence from the EgoDex dataset, from raw data to visualization. 
 
 **1. Data Setup**
 
