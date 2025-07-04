@@ -1,0 +1,17 @@
+# Configuration for the EgoDex dataset adapter
+
+# Frame rate of the source videos
+frame_rate: 30.0
+
+# Default camera intrinsics matrix used when none is available in the source data.
+# Values are in the order of: [fx, 0, cx], [0, fy, cy], [0, 0, 1]
+default_intrinsics:
+  - [736.6339, 0.0, 960.0]
+  - [0.0, 736.6339, 540.0]
+  - [0.0, 0.0, 1.0]
+
+# Settings for RGB video frame encoding
+rgb_encoding:
+  format: .jpg
+  # JPEG quality setting (0-100)
+  jpeg_quality: 95 
