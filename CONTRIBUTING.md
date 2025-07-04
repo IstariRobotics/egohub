@@ -4,19 +4,43 @@ We welcome contributions! This guide provides instructions for extending `egohub
 
 ## How to Add a New Dataset Adapter
 
-Adding support for a new egocentric dataset involves creating a new **Adapter** class. The adapter is responsible for converting the raw, dataset-specific format into our canonical HDF5 schema.
+Adding support for a new egocentric dataset involves creating a new **Adapter** class and a corresponding **configuration file**. The adapter is responsible for converting the raw, dataset-specific format into our canonical HDF5 schema, while the config file manages dataset-specific parameters.
 
 Here is the step-by-step process, using a hypothetical `AwesomeEgo` dataset as an example.
 
-### Step 1: Create the Adapter File
+### Step 1: Create the Configuration File
 
-Create a new Python file in the `egohub/adapters/` directory. The filename should be the snake-cased name of the dataset.
+First, create a YAML configuration file in the `configs/` directory. The filename must be the snake-cased name of the dataset. This name will be used to link the adapter to its configuration.
+
+-   **File:** `configs/awesome_ego.yaml`
+
+```yaml
+# configs/awesome_ego.yaml
+
+# Frame rate of the source videos
+frame_rate: 60.0
+
+# Default camera intrinsics if not present in the data
+default_intrinsics:
+  - [1000.0, 0.0, 960.0]
+  - [0.0, 1000.0, 540.0]
+  - [0.0, 0.0, 1.0]
+
+# RGB encoding settings
+rgb_encoding:
+  format: .jpg
+  jpeg_quality: 95
+```
+
+### Step 2: Create the Adapter File
+
+Create a new Python file in the `egohub/adapters/` directory.
 
 -   **File:** `egohub/adapters/awesome_ego.py`
 
-### Step 2: Implement the Adapter Class
+### Step 3: Implement the Adapter Class
 
-Inside your new file, create a class that inherits from `egohub.adapters.base.BaseAdapter`. You must implement two key methods: `discover_sequences` and `process_sequence`.
+Inside your new file, create a class that inherits from `egohub.adapters.base.BaseAdapter`. The `name` attribute **must** match the name of your configuration file (without the `.yaml` extension). You will also need to implement the `discover_sequences` and `process_sequence` methods.
 
 ```python
 # egohub/adapters/awesome_ego.py
@@ -27,10 +51,11 @@ import h5py
 import numpy as np
 
 from egohub.adapters.base import BaseAdapter
-from egohub.schema import create_trajectory_group_from_template
+from egohub.schema import create_trajectory_group_from_template # Example helper
 
 class AwesomeEgoAdapter(BaseAdapter):
     """Adapter for the AwesomeEgo dataset."""
+    name = "awesome_ego" # This MUST match the config file name
 
     def discover_sequences(self) -> list[dict]:
         """
@@ -55,28 +80,23 @@ class AwesomeEgoAdapter(BaseAdapter):
         Process a single sequence and write its data to the provided HDF5 group.
         
         This is where you'll read the raw data, perform any necessary transformations,
-        and write to the canonical HDF5 structure.
+        and write to the canonical HDF5 structure. You can access your config
+        via `self.config`.
         """
         video_path = seq_info["video_path"]
         logging.info(f"Processing sequence from {video_path}...")
         
+        # Example: Access a value from your config file
+        frame_rate = self.config.get("frame_rate", 30.0)
+        logging.info(f"Using frame rate: {frame_rate}")
+        
         # Example: Write placeholder data
         num_frames = 100 # Replace with actual frame count
         
-        # Get a pre-configured group based on our schema template
-        # create_trajectory_group_from_template(traj_group, num_frames)
-
-        # Write camera pose data (e.g., from JSON annotations)
-        # traj_group["cameras/ego_camera/pose_in_world"][:] = ...
-
-        # Write JPG-encoded video frames
-        # video_stream = traj_group["cameras/ego_camera/rgb/image_bytes"]
-        # for i, frame in enumerate(read_video_frames(video_path)):
-        #     encoded_frame = encode_as_jpg(frame)
-        #     video_stream[i] = np.frombuffer(encoded_frame, dtype='uint8')
+        # ... (rest of your processing logic)
 ```
 
-### Step 3: Register the Adapter in the CLI
+### Step 4: Register the Adapter in the CLI
 
 Finally, make your new adapter accessible through the `egohub` command-line interface.
 
@@ -100,7 +120,7 @@ ADAPTER_MAP = {
 # ... rest of the file
 ```
 
-### Step 4: Test Your Adapter
+### Step 5: Test Your Adapter
 
 You can now run your adapter from the command line:
 
