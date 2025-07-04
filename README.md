@@ -162,10 +162,12 @@ Each HDF5 file can contain multiple trajectories, identified as `trajectory_{:04
 | :------------------------------ | :------------------- | :---------------------------------------------------------------------------------------------------------------------------------------- |
 | **`metadata/`**                 | `metadata: Metadata` | Contains high-level information like `uuid`, `source_dataset`, and a synchronized master `timestamps_ns` dataset.                          |
 | **`cameras/{camera_name}/`**    | `cameras: Dict`      | A group for each camera, where `{camera_name}` is a unique identifier (e.g., `ego_camera`). Contains `pose_in_world`, `intrinsics`, and `rgb` data. |
-| **`hands/{left,right}/`**       | `hands: Dict`        | Contains data related to hand tracking, such as `pose_in_world`.                                                                          |
-| **`skeleton/`** (optional)      | `skeleton: Skeleton` | Stores full-body skeleton tracking data, like joint `positions` and `confidences`.                                                        |
+| **`hands/{left,right}/`**       | `hands: Dict`        | Contains data related to hand tracking, such as `pose_in_world` and `pose_indices`.                                             |
+| **`skeleton/`** (optional)      | `skeleton: Skeleton` | Stores full-body skeleton tracking data. The skeleton structure is fixed to a canonical 22-joint definition based on SMPL-X (see `egohub/constants.py`), ensuring consistency across all datasets. The group contains `positions`, `confidences`, and `frame_indices`. |
 
-**Note on Extensibility:** The base schema is intentionally minimal. Additional data, such as object detections or depth maps, can be added to the HDF5 file by enrichment **Tools**. For example, the `HuggingFaceObjectDetectionTool` creates and populates an `objects/` group.
+**Note on Extensibility and Temporal Indices:** The base schema is intentionally minimal. Additional data can be added by enrichment **Tools**.
+
+A key feature of the schema is robust temporal synchronization. Every time-varying dataset (e.g., `pose_in_world`) is accompanied by an index dataset (e.g., `pose_indices`). Each value in an index array corresponds to a frame and points to the index of the master `metadata/timestamps_ns` array that provides its timestamp. This design ensures that all data streams can be correctly aligned even if they have different frame rates or dropped frames.
 
 ### Coordinate Systems
 

@@ -9,7 +9,7 @@ import rerun.blueprint as rrb
 from PIL import Image
 import io
 
-from egohub.constants import AVP_ID2NAME, AVP_LINKS, AVP_IDS
+from egohub.constants import AVP_ID2NAME, AVP_LINKS, AVP_IDS, CANONICAL_SKELETON_JOINTS, CANONICAL_SKELETON_HIERARCHY
 
 logger = logging.getLogger(__name__)
 
@@ -65,16 +65,21 @@ class RerunExporter:
         self._set_pose_annotation_context()
 
         timestamps_dset = traj_group.get("metadata/timestamps_ns")
-        num_frames = 0
-        if isinstance(timestamps_dset, h5py.Dataset):
-            num_frames = len(timestamps_dset)
+        if not isinstance(timestamps_dset, h5py.Dataset):
+            logger.error("No 'timestamps_ns' dataset found. Cannot visualize.")
+            return
+
+        master_timestamps_ns = timestamps_dset[:]
+        num_frames = len(master_timestamps_ns)
 
         if self.max_frames:
             num_frames = min(num_frames, self.max_frames)
         
         logger.info(f"Visualizing {num_frames} frames for {traj_name}...")
         for i in range(num_frames):
+            timestamp_ns = master_timestamps_ns[i]
             rr.set_time_sequence("frame", i)
+            rr.set_time_nanos("timestamp", timestamp_ns)
             self._log_temporal_camera_data(traj_group, cam_keys, i)
             self._log_temporal_object_data(traj_group, cam_keys, i)
             self._log_temporal_skeleton_data(traj_group, i)
@@ -125,13 +130,22 @@ class RerunExporter:
                     ), static=True)
 
     def _set_pose_annotation_context(self) -> None:
-        rr.log("world/skeleton", rr.AnnotationContext(
-            [rr.ClassDescription(
-                info=rr.AnnotationInfo(id=0, label="AVP Skeleton"),
-                keypoint_annotations=[rr.AnnotationInfo(id=id, label=name) for id, name in AVP_ID2NAME.items()],
-                keypoint_connections=AVP_LINKS,
-            )]
-        ), static=True)
+        keypoint_connections = []
+        for child, parent in CANONICAL_SKELETON_HIERARCHY.items():
+            if child in CANONICAL_SKELETON_JOINTS and parent in CANONICAL_SKELETON_JOINTS:
+                child_id = CANONICAL_SKELETON_JOINTS.index(child)
+                parent_id = CANONICAL_SKELETON_JOINTS.index(parent)
+                keypoint_connections.append((parent_id, child_id))
+
+        rr.log("world/skeleton", rr.AnnotationContext([
+            rr.ClassDescription(
+                info=rr.AnnotationInfo(id=0, label="Canonical Skeleton"),
+                keypoint_annotations=[
+                    rr.AnnotationInfo(id=i, label=name) for i, name in enumerate(CANONICAL_SKELETON_JOINTS)
+                ],
+                keypoint_connections=keypoint_connections,
+            )
+        ]), static=True)
 
     def _log_temporal_camera_data(self, traj_group: h5py.Group, cam_keys: list[str], frame_idx: int):
         for cam_key in cam_keys:
@@ -139,40 +153,49 @@ class RerunExporter:
             if not isinstance(cam_group, h5py.Group): continue
 
             pose_dset = cam_group.get("pose_in_world")
-            if isinstance(pose_dset, h5py.Dataset):
-                pose = pose_dset[frame_idx]
-                rr.log(f"world/cameras/{cam_key}", rr.Transform3D(
-                    translation=pose[:3, 3], mat3x3=pose[:3, :3]
-                ))
+            pose_indices_dset = cam_group.get("pose_indices")
+            if isinstance(pose_dset, h5py.Dataset) and isinstance(pose_indices_dset, h5py.Dataset):
+                pose_indices = pose_indices_dset[:]
+                current_indices = np.where(pose_indices == frame_idx)[0]
+                for idx in current_indices:
+                    pose = pose_dset[idx]
+                    rr.log(f"world/cameras/{cam_key}", rr.Transform3D(
+                        translation=pose[:3, 3], mat3x3=pose[:3, :3]
+                    ))
 
             rgb_grp = cam_group.get("rgb")
             if isinstance(rgb_grp, h5py.Group):
                 frame_sizes = rgb_grp.get("frame_sizes")
                 image_bytes = rgb_grp.get("image_bytes")
-                if isinstance(frame_sizes, h5py.Dataset) and isinstance(image_bytes, h5py.Dataset):
-                    num_bytes = frame_sizes[frame_idx]
-                    encoded_frame = image_bytes[frame_idx, :num_bytes]
-                    
-                    # Decode the image before logging
-                    image = Image.open(io.BytesIO(encoded_frame))
-                    image_np = np.array(image)
-                    
-                    rr.log(f"world/cameras/{cam_key}/image", rr.Image(image_np))
+                frame_indices_dset = rgb_grp.get("frame_indices")
+                if isinstance(frame_sizes, h5py.Dataset) and isinstance(image_bytes, h5py.Dataset) and isinstance(frame_indices_dset, h5py.Dataset):
+                    frame_indices = frame_indices_dset[:]
+                    current_indices = np.where(frame_indices == frame_idx)[0]
+                    for idx in current_indices:
+                        num_bytes = frame_sizes[idx]
+                        encoded_frame = image_bytes[idx, :num_bytes]
+                        
+                        image = Image.open(io.BytesIO(encoded_frame))
+                        image_np = np.array(image)
+                        
+                        rr.log(f"world/cameras/{cam_key}/image", rr.Image(image_np))
 
     def _log_temporal_object_data(self, traj_group: h5py.Group, cam_keys: list[str], frame_idx: int):
+        # This function will need to be updated if/when objects get temporal indices
         objects_group = traj_group.get("objects")
         if not isinstance(objects_group, h5py.Group): return
-
+        
         all_boxes, all_labels = [], []
         for label, obj_grp in objects_group.items():
             if isinstance(obj_grp, h5py.Group):
                 scores_dset = obj_grp.get("scores")
                 bboxes_dset = obj_grp.get("bboxes_2d")
                 if isinstance(scores_dset, h5py.Dataset) and isinstance(bboxes_dset, h5py.Dataset):
-                    score = scores_dset[frame_idx]
-                    if score > 0:
-                        all_boxes.append(bboxes_dset[frame_idx])
-                        all_labels.append(f"{label}: {score:.2f}")
+                    if frame_idx < len(scores_dset):
+                        score = scores_dset[frame_idx]
+                        if score > 0:
+                            all_boxes.append(bboxes_dset[frame_idx])
+                            all_labels.append(f"{label}: {score:.2f}")
 
         if all_boxes and cam_keys:
             img_path = f"world/cameras/{cam_keys[0]}/image"
@@ -186,14 +209,20 @@ class RerunExporter:
 
         pos_dset = skeleton_group.get("positions")
         conf_dset = skeleton_group.get("confidences")
-        if isinstance(pos_dset, h5py.Dataset) and isinstance(conf_dset, h5py.Dataset):
-            positions = pos_dset[frame_idx]
-            confidences = conf_dset[frame_idx]
-            colors = self._confidence_scores_to_rgb(confidences)
-            rr.log("world/skeleton", rr.Points3D(
-                positions=positions, colors=colors, radii=0.01,
-                class_ids=0, keypoint_ids=AVP_IDS
-            ))
+        frame_indices_dset = skeleton_group.get("frame_indices")
+        if isinstance(pos_dset, h5py.Dataset) and isinstance(conf_dset, h5py.Dataset) and isinstance(frame_indices_dset, h5py.Dataset):
+            frame_indices = frame_indices_dset[:]
+            current_indices = np.where(frame_indices == frame_idx)[0]
+
+            for idx in current_indices:
+                positions = pos_dset[idx]
+                confidences = conf_dset[idx]
+                colors = self._confidence_scores_to_rgb(confidences)
+                
+                rr.log("world/skeleton", rr.Points3D(
+                    positions=positions, colors=colors, radii=0.01,
+                    class_ids=0, keypoint_ids=list(range(len(CANONICAL_SKELETON_JOINTS)))
+                ))
 
     def _confidence_scores_to_rgb(self, confidence_scores: np.ndarray) -> np.ndarray:
         n_kpts = confidence_scores.shape[0]

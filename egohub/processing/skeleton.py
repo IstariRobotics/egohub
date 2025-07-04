@@ -1,6 +1,8 @@
 import h5py
 import numpy as np
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict
+
+from egohub.constants import CANONICAL_SKELETON_JOINTS
 
 class SkeletonProcessor:
     """
@@ -49,3 +51,74 @@ class SkeletonProcessor:
             return None
             
         return joint_names, np.stack(positions_list, axis=1), np.stack(confidences_list, axis=1) 
+
+def remap_skeleton(
+    source_positions: np.ndarray,
+    source_confidences: np.ndarray,
+    source_joint_names: List[str],
+    joint_map: Optional[Dict[str, str]] = None,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Remaps a source skeleton to the canonical skeleton format.
+
+    This function takes a skeleton with an arbitrary joint definition and maps it
+    to the `CANONICAL_SKELETON_JOINTS` standard. It creates new positions and
+    confidences arrays that match the canonical joint order.
+
+    - If a canonical joint exists in the source skeleton (or is in the joint_map),
+      its position and confidence are copied.
+    - If a canonical joint does not exist in the source, its position is filled
+      with NaNs and its confidence with 0.
+    - Any joints in the source skeleton that are not in the canonical definition
+      are ignored.
+
+    Args:
+        source_positions: A (num_frames, num_source_joints, 3) numpy array.
+        source_confidences: A (num_frames, num_source_joints) numpy array.
+        source_joint_names: A list of joint names corresponding to the second
+                            dimension of `source_positions`.
+        joint_map: An optional dictionary mapping source joint names to
+                   canonical joint names.
+
+    Returns:
+        A tuple containing:
+        - canonical_positions (np.ndarray): An array of shape 
+          (num_frames, num_canonical_joints, 3) with remapped positions.
+        - canonical_confidences (np.ndarray): An array of shape
+          (num_frames, num_canonical_joints) with remapped confidences.
+    """
+    num_frames = source_positions.shape[0]
+    num_canonical_joints = len(CANONICAL_SKELETON_JOINTS)
+    canonical_joint_indices = {name: i for i, name in enumerate(CANONICAL_SKELETON_JOINTS)}
+
+    # Create a mapping from source joint names to their indices.
+    source_joint_indices = {name: i for i, name in enumerate(source_joint_names)}
+
+    # Initialize the new arrays.
+    canonical_positions = np.full(
+        (num_frames, num_canonical_joints, 3), 
+        np.nan, 
+        dtype=np.float32
+    )
+    canonical_confidences = np.zeros(
+        (num_frames, num_canonical_joints), 
+        dtype=np.float32
+    )
+
+    if joint_map:
+        # Use the provided map for remapping
+        for source_name, canonical_name in joint_map.items():
+            if source_name in source_joint_indices and canonical_name in canonical_joint_indices:
+                source_idx = source_joint_indices[source_name]
+                canonical_idx = canonical_joint_indices[canonical_name]
+                canonical_positions[:, canonical_idx, :] = source_positions[:, source_idx, :]
+                canonical_confidences[:, canonical_idx] = source_confidences[:, source_idx]
+    else:
+        # Fallback to direct name matching
+        for i, joint_name in enumerate(CANONICAL_SKELETON_JOINTS):
+            if joint_name in source_joint_indices:
+                source_index = source_joint_indices[joint_name]
+                canonical_positions[:, i, :] = source_positions[:, source_index, :]
+                canonical_confidences[:, i] = source_confidences[:, source_index]
+
+    return canonical_positions, canonical_confidences 

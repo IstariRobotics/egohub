@@ -96,7 +96,47 @@ class AwesomeEgoAdapter(BaseAdapter):
         # ... (rest of your processing logic)
 ```
 
-### Step 4: Register the Adapter in the CLI
+### Step 4: Handling Skeleton Data (If Applicable)
+
+If your dataset includes full-body skeleton data, you **must** remap it to the library's canonical skeleton format. This is enforced by the `BaseAdapter`, which requires you to implement two properties.
+
+1.  **Define the Source Skeleton**: In your adapter class, implement `source_joint_names` and `source_skeleton_hierarchy` to describe the skeleton provided by your dataset. You can define these lists and dictionaries directly in your adapter file or, for complex skeletons, in `egohub/constants.py`.
+
+    ```python
+    from egohub.constants import CANONICAL_SKELETON_JOINTS # For reference
+    
+    # In your AwesomeEgoAdapter class:
+    @property
+    def source_joint_names(self) -> list[str]:
+        # Return the list of joint names from your dataset
+        return ["root", "neck", "head", "left_shoulder", "left_elbow", ...]
+
+    @property
+    def source_skeleton_hierarchy(self) -> dict[str, str]:
+        # Return the kinematic tree for your dataset's skeleton
+        return {"neck": "root", "head": "neck", ...}
+    ```
+
+2.  **Use the Remapping Utility**: In your `process_sequence` method, after loading the source skeleton data, use the `egohub.processing.skeleton.remap_skeleton` utility to perform the conversion.
+
+    ```python
+    from egohub.processing.skeleton import remap_skeleton
+    
+    # In your process_sequence method:
+    # ...
+    source_skeleton_positions = ... # Load your (N, num_source_joints, 3) data
+    
+    canonical_positions = remap_skeleton(
+        source_positions=source_skeleton_positions,
+        source_joint_names=self.source_joint_names
+    )
+    
+    # Now, save `canonical_positions` to the HDF5 file.
+    skeleton_group.create_dataset("positions", data=canonical_positions)
+    # ...
+    ```
+
+### Step 5: Register the Adapter in the CLI
 
 Finally, make your new adapter accessible through the `egohub` command-line interface.
 
@@ -120,7 +160,7 @@ ADAPTER_MAP = {
 # ... rest of the file
 ```
 
-### Step 5: Test Your Adapter
+### Step 6: Test Your Adapter
 
 You can now run your adapter from the command line:
 
