@@ -18,6 +18,8 @@ class BaseAdapter(ABC):
     interface and a common run loop for all adapters.
     """
 
+    name: str = ""
+
     def __init__(self, raw_dir: Path, output_file: Path):
         self.raw_dir = raw_dir
         self.output_file = output_file

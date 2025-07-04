@@ -12,6 +12,7 @@ from egohub.transforms.coordinates import arkit_to_canonical_poses
 
 class EgoDexAdapter(BaseAdapter):
     """Adapter for the EgoDex dataset."""
+    name = "egodex"
 
     def discover_sequences(self) -> list[dict]:
         """
