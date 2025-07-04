@@ -51,9 +51,8 @@ def main():
         adapter = adapter_class(args.raw_dir, args.output_file)
         adapter.run(num_sequences=args.num_sequences)
     elif args.command == "visualize":
-        dataset = EgocentricH5Dataset(args.h5_path, camera_streams=args.camera_streams)
         exporter = RerunExporter(max_frames=args.max_frames)
-        exporter.export(dataset, output_path=args.output_rrd)
+        exporter.export(args.h5_path, output_path=args.output_rrd)
 
 if __name__ == "__main__":
     main() 
