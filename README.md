@@ -7,7 +7,8 @@ This project implements a complete pipeline for processing egocentric data, desi
 
 1.  **Ingest (Adapters)**: Raw, heterogeneous egocentric datasets (e.g., EgoDex, HOT3D, Ego4D) are converted into a canonical format using dedicated, class-based **Adapters** that inherit from `egohub.adapters.BaseAdapter`.
 2.  **Re-express (Universal Human Rig)**: The data is re-expressed into a canonical schema that represents a **universal human rig**. This critical step standardizes the data by mapping different dataset conventions (e.g., coordinate systems, skeleton joint definitions) onto a single, consistent format. The result is a multi-modal HDF5 file organized by trajectory and data stream (e.g., `cameras/{camera_name}/rgb`, `hands/left`).
-3.  **Consume (Training & Visualization)**: Once the data is in the canonical format, it can be consumed for multiple purposes in parallel:
+3.  **Enrich (Tools)**: The canonical HDF5 file can be enriched by applying **Tools**. These are modular processing steps (e.g., running object detection, estimating depth) that read data from the HDF5 file and write their results back into it.
+4.  **Consume (Training & Visualization)**: Once the data is in the canonical format, it can be consumed for multiple purposes in parallel:
     *   **Training**: A two-stage pipeline inspired by research like [Latent Action Diffusion](https://arxiv.org/pdf/2506.14608v1) is provided to pre-train powerful policy models. This involves first training a `MultimodalVAE` to create a unified latent representation of the data, and then using those latent vectors to pre-train a temporal `LatentPolicyModel`.
     *   **Visualization & Serving**: The data can be immediately visualized using the built-in `RerunExporter`. The library also provides a `EgocentricH5Dataset` class to serve the data for custom PyTorch models or other applications.
 
@@ -30,19 +31,19 @@ graph TD
         Adapter --> CanonicalH5["Canonical HDF5 File<br/><b>(Universal Human Rig)</b>"]
     end
 
-    subgraph "Stage 3: Consume"
+    subgraph "Stage 3: Enrich"
+        ToolDetection["Object Detection Tool"]
+        ToolHand["Hand Pose Tool<br/>(Future Work)"]
+        
+        CanonicalH5 -->|Reads video| ToolDetection
+        ToolDetection -->|Writes object data| CanonicalH5
+    end
+
+    subgraph "Stage 4: Consume"
         direction TB
-        subgraph Downstream Applications
-            AppPytorch["PyTorch Datasets"]
-            AppRerun["Rerun Visualizer"]
-            AppSim["Robotics Simulator"]
-        end
-        subgraph "Enrichment Toolbox (Future Work)"
-            ToolHand["Hand Pose Estimator"]
-            ToolDepth["Depth Estimator"]
-            ToolSeg["Video Segmenter"]
-            ToolLabel["Action Labeler VLM"]
-        end
+        AppPytorch["PyTorch Datasets"]
+        AppRerun["Rerun Visualizer"]
+        AppSim["Robotics Simulator<br/>(Future Work)"]
     end
 
     %% Define Flows
@@ -50,14 +51,9 @@ graph TD
     CanonicalH5 --> AppRerun
     CanonicalH5 --> AppSim
 
-    CanonicalH5 -->|Reads video| ToolHand
-    ToolHand -->|Writes back| CanonicalH5
-    CanonicalH5 -->|Reads video| ToolDepth
-    ToolDepth -->|Writes back| CanonicalH5
-
     %% Apply Styles to Nodes
-    class RawData,Adapter,CanonicalH5,AppPytorch,AppRerun built
-    class ToolHand,ToolDepth,ToolSeg,ToolLabel,AppSim notBuilt
+    class RawData,Adapter,CanonicalH5,AppPytorch,AppRerun,ToolDetection built
+    class ToolHand,AppSim notBuilt
 ```
 _Completed modules marked in green; future work marked in grey._
 
@@ -83,42 +79,30 @@ uv pip install -e .
 
 ### Usage Workflows
 
-The following steps outline the key workflows supported by the library. You can run the visualization workflow independently, or follow the full pre-training pipeline.
+The following steps outline the key workflows supported by the library.
 
-#### Visualization Workflow
-At any point after converting your data, you can visualize its contents with Rerun. This is useful for inspecting the raw data, camera poses, and skeleton data.
-
+#### 1. Conversion Workflow
+Convert a raw dataset into the canonical HDF5 format.
 ```bash
-# First, convert a raw dataset (if you haven't already)
 egohub convert egodex \
     --raw-dir path/to/raw/EgoDex \
     --output-file data/processed/egodex.h5
-
-# Now, visualize the canonical HDF5 file
-egohub visualize data/processed/egodex.h5 --max-frames 100
 ```
 
-#### Full Pre-Training Workflow
-This workflow uses the canonical data to train and save a pre-trained policy model.
-
+#### 2. Enrichment Workflow
+Apply processing tools to the canonical HDF5 file to add new data, such as object detections.
 ```bash
-# 1. Convert Raw Data (if not already done)
-egohub convert egodex \
-    --raw-dir path/to/raw/EgoDex \
-    --output-file data/processed/egodex.h5 \
-    --num-sequences 10
+python -m egohub.cli.process_data \
+    --input-file data/processed/egodex.h5 \
+    --tool HuggingFaceObjectDetectionTool
+```
 
-# 2. Train the Multimodal VAE
-# This will save a vae_checkpoint.pth file
-python -m egohub.cli.train_vae data/processed/egodex.h5 --epochs 20
-
-# 3. Encode the Dataset
-# This saves the latent vectors back into the HDF5 file
-python -m egohub.cli.encode_dataset data/processed/egodex.h5 vae_checkpoint.pth
-
-# 4. Pre-train the Policy Model
-# This will save a policy_checkpoint.pth file
-python -m egohub.cli.pretrain_policy data/processed/egodex.h5 --epochs 10
+#### 3. Visualization Workflow
+At any point, you can visualize the contents of an HDF5 file with Rerun. This is useful for inspecting the original data as well as any data added by enrichment tools.
+```bash
+python -m egohub.cli.export_to_rerun \
+    --input-file data/processed/egodex.h5 \
+    --max-frames 100
 ```
 
 ## Supported Datasets
