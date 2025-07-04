@@ -16,13 +16,15 @@ from egohub.video_utils import hdf5_to_cv2_video
 class HuggingFaceObjectDetectionTool(BaseTool):
     """A tool for running object detection using a Hugging Face model."""
 
-    def __init__(self, model_name: str = "facebook/detr-resnet-50"):
+    def __init__(self, model_name: str = "facebook/detr-resnet-50", output_group_name: str = "objects"):
         """Initializes the tool with a Hugging Face model.
 
         Args:
             model_name: The name of the object detection model on the HF Hub.
+            output_group_name: The name of the HDF5 group to save results to.
         """
         self.model_name = model_name
+        self.output_group_name = output_group_name
         logging.info(f"Initializing HF pipeline for model: {self.model_name}")
         self.detector = pipeline("object-detection", model=self.model_name)
 
@@ -54,12 +56,12 @@ class HuggingFaceObjectDetectionTool(BaseTool):
                 )
         
         # --- Write results to HDF5 ---
-        if "objects" in traj_group:
-            logging.warning("Overwriting existing 'objects' group.")
-            del traj_group["objects"]
-        objects_group = traj_group.create_group("objects")
+        if self.output_group_name in traj_group:
+            logging.warning(f"Overwriting existing '{self.output_group_name}' group.")
+            del traj_group[self.output_group_name]
+        objects_group = traj_group.create_group(self.output_group_name)
 
-        logging.info(f"Writing {len(all_detections)} detected object classes to HDF5.")
+        logging.info(f"Writing {len(all_detections)} detected object classes to HDF5 group '{self.output_group_name}'.")
         for label, detections in all_detections.items():
             obj_group = objects_group.create_group(label)
             

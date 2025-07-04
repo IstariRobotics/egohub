@@ -5,6 +5,8 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 import logging
 import yaml
+from egohub.schema import Trajectory
+from typing import Dict, Any, Optional, List
 
 import h5py
 from tqdm import tqdm
@@ -21,10 +23,10 @@ class BaseAdapter(ABC):
 
     name: str = ""
 
-    def __init__(self, raw_dir: Path, output_file: Path):
+    def __init__(self, raw_dir: Path, output_file: Path, config: Optional[Dict[str, Any]] = None):
         self.raw_dir = raw_dir
         self.output_file = output_file
-        self.config = self._load_config()
+        self.config = config or self._load_config()
         logging.info(f"Starting adapter: {self.__class__.__name__}")
 
     def _load_config(self) -> dict:
@@ -46,6 +48,18 @@ class BaseAdapter(ABC):
             except yaml.YAMLError as e:
                 logging.error(f"Error parsing YAML file {config_path}: {e}")
                 raise
+
+    @property
+    @abstractmethod
+    def source_joint_names(self) -> List[str]:
+        """Returns the list of joint names for the source skeleton."""
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def source_skeleton_hierarchy(self) -> Dict[str, str]:
+        """Returns the kinematic hierarchy for the source skeleton."""
+        raise NotImplementedError
 
     @abstractmethod
     def discover_sequences(self) -> list[dict]:
