@@ -129,9 +129,58 @@ python -m egohub.cli.process_data \
 #### 3. Visualization Workflow
 At any point, you can visualize the contents of an HDF5 file with Rerun. This is useful for inspecting the original data as well as any data added by enrichment tools.
 ```bash
-python -m egohub.cli.export_to_rerun \
-    --input-file data/processed/egodex.h5 \
-    --max-frames 100
+egohub visualize data/processed/egodex.h5
+```
+
+### End-to-End Example: EgoDex
+
+This example walks through the full pipeline for a single sequence from the EgoDex dataset, from raw data to visualization.
+
+**1. Data Setup**
+
+First, place your raw EgoDex data into the `data/raw/` directory. The pipeline expects a specific structure. For this example, we'll use the `add_remove_lid` sequence:
+
+```
+egohub/
+└── data/
+    └── raw/
+        └── EgoDex/
+            └── test/
+                └── add_remove_lid/
+                    ├── calib/
+                    ├── data.json
+                    └── video.mp4
+```
+
+**2. Convert the Raw Data**
+
+Use the `egohub convert` command to transform the raw data into the canonical `egohub` HDF5 format. We'll process only the first sequence for this test.
+
+```bash
+egohub convert egodex \
+    --raw-dir data/raw/EgoDex/test/add_remove_lid \
+    --output-file data/processed/EgoDex_add_remove_lid.hdf5 \
+    --num-sequences 1
+```
+This creates a new file at `data/processed/EgoDex_add_remove_lid.hdf5`.
+
+**3. Enrich with Object Detections**
+
+Next, run an enrichment tool to add more data to the file. We'll use the `HuggingFaceObjectDetectionTool` to find objects in the video frames. Since this is a test, we will only process the first trajectory in the file.
+
+```bash
+python egohub/cli/process_data.py \
+    --input-file data/processed/EgoDex_add_remove_lid.hdf5 \
+    --tools HuggingFaceObjectDetectionTool \
+    --num-trajectories 1
+```
+
+**4. Visualize the Result**
+
+Finally, use the `egohub visualize` command to view the processed data in the Rerun viewer. This will show the camera, the fully articulated skeleton (including hands and fingers), and the bounding boxes from the object detection tool.
+
+```bash
+egohub visualize data/processed/EgoDex_add_remove_lid.hdf5
 ```
 
 ## Supported Datasets
