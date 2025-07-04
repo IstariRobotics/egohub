@@ -1,14 +1,29 @@
 from __future__ import annotations
+import pkgutil
+import inspect
 from pathlib import Path
 import argparse
-from egohub.adapters.egodex import EgoDexAdapter
+from egohub.adapters.base import BaseAdapter
 from egohub.datasets import EgocentricH5Dataset
 from egohub.exporters.rerun import RerunExporter
+import egohub.adapters
+
+def discover_adapters() -> dict[str, type[BaseAdapter]]:
+    """Dynamically discovers and loads adapter classes from the 'egohub.adapters' module."""
+    adapter_map = {}
+    adapter_module = egohub.adapters
+    
+    for _, module_name, _ in pkgutil.walk_packages(adapter_module.__path__, prefix=adapter_module.__name__ + '.'):
+        module = __import__(module_name, fromlist='dummy')
+        for _, obj in inspect.getmembers(module):
+            if inspect.isclass(obj) and issubclass(obj, BaseAdapter) and obj is not BaseAdapter:
+                if obj.name:
+                    adapter_map[obj.name] = obj
+
+    return adapter_map
 
 # A simple registry to map dataset names to their adapter classes.
-ADAPTER_MAP = {
-    "egodex": EgoDexAdapter
-}
+ADAPTER_MAP = discover_adapters()
 
 def main():
     """The main entry point for the egohub command-line interface."""
