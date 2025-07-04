@@ -203,4 +203,15 @@ cython_debug/
 
 # Project-specific
 projectplan.md
-.cursor/ 
+.cursor/
+
+# Next.js / Node.js
+/next/node_modules
+/next/.next
+/next/.env.local
+/next/.env.development.local
+/next/.env.test.local
+/next/.env.production.local
+/next/npm-debug.log*
+/next/yarn-debug.log*
+/next/yarn-error.log* 

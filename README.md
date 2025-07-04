@@ -85,6 +85,20 @@ uv pip install -e .
 
 The following steps outline the key workflows supported by the library. You can run the visualization workflow independently, or follow the full pre-training pipeline.
 
+#### GUI / Frontend Workflow
+This workflow runs the visual pipeline builder.
+
+```bash
+# Navigate to the frontend directory /next
+cd app
+
+# Install dependencies (only needs to be done once)
+npm install
+
+# Run the development server
+npm run dev
+```
+
 #### Visualization Workflow
 At any point after converting your data, you can visualize its contents with Rerun. This is useful for inspecting the raw data, camera poses, and skeleton data.
 
