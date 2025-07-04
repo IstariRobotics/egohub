@@ -41,6 +41,11 @@ def get_args() -> argparse.Namespace:
         help="""Additional keyword arguments to pass to the tool's constructor,
 in 'key=value' format. For example: model_src='user/model'""",
     )
+    parser.add_argument(
+        "--num-trajectories",
+        type=int,
+        help="Optional: Process only the first N trajectories.",
+    )
     return parser.parse_args()
 
 
@@ -132,7 +137,12 @@ def main() -> None:
 
     with h5py.File(args.input_file, "a") as f:
         trajectory_keys = sorted([key for key in f.keys() if key.startswith("trajectory_")])
-        logger.info(f"Found {len(trajectory_keys)} trajectories to process.")
+        
+        if args.num_trajectories:
+            trajectory_keys = trajectory_keys[:args.num_trajectories]
+            logger.info(f"Processing the first {len(trajectory_keys)} trajectories as requested.")
+        else:
+            logger.info(f"Found {len(trajectory_keys)} trajectories to process.")
 
         for key in tqdm(trajectory_keys, desc="Processing Trajectories"):
             logger.info(f"--- Processing {key} ---")
