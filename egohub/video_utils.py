@@ -10,7 +10,13 @@ import subprocess
 import tempfile
 from pathlib import Path
 from timeit import default_timer as timer
-from typing import Literal
+from typing import Literal, Iterator
+
+import cv2
+import h5py
+import numpy as np
+from PIL import Image
+import io
 
 
 def create_temp_video_from_img_dir(
@@ -512,4 +518,34 @@ def repair_corrupted_video(
     if process.returncode != 0:
         raise RuntimeError(f"Video repair failed: {process.stderr}")
     
-    return output_path 
+    return output_path
+
+
+def hdf5_to_cv2_video(
+    rgb_group: h5py.Group,
+) -> Iterator[np.ndarray]:
+    """Extracts and decodes video frames from an HDF5 group.
+
+    Args:
+        rgb_group: The HDF5 group containing 'image_bytes' and 'frame_sizes'
+                   datasets. This is assumed to be the 'rgb' group under a
+                   specific camera (e.g., 'ego_camera').
+
+    Yields:
+        OpenCV (numpy) images in BGR format.
+    """
+    image_bytes_dset = rgb_group["image_bytes"]
+    frame_sizes_dset = rgb_group["frame_sizes"]
+
+    for i in range(len(frame_sizes_dset)):
+        num_bytes = frame_sizes_dset[i]
+        encoded_frame = image_bytes_dset[i, :num_bytes]
+        
+        # Decode the image from memory
+        image = Image.open(io.BytesIO(encoded_frame))
+        
+        # Convert to numpy array and then to BGR for OpenCV
+        frame_rgb = np.array(image)
+        frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+        
+        yield frame_bgr 

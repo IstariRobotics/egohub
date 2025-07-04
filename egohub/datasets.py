@@ -18,6 +18,8 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 from abc import ABC, abstractmethod
+import io
+from PIL import Image
 
 
 class BaseDatasetReader(Dataset, ABC):
@@ -178,20 +180,13 @@ class EgocentricH5Dataset(BaseDatasetReader):
 
                 # Load RGB image
                 rgb_path = f"{cam_group_path}/rgb"
-                if f"{rgb_path}/image_bytes" in traj_group and f"{rgb_path}/frame_sizes" in traj_group:
-                    image_bytes = traj_group[f"{rgb_path}/image_bytes"][frame_idx]
-                    frame_size = traj_group[f"{rgb_path}/frame_sizes"][frame_idx]
-                    actual_bytes = image_bytes[:frame_size]
-                    
-                    nparr = np.frombuffer(actual_bytes, np.uint8)
-                    rgb_image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                    
-                    if rgb_image is not None:
-                        rgb_image = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2RGB)
-                        rgb_tensor = torch.from_numpy(rgb_image).permute(2, 0, 1).float() / 255.0
-                        result['rgb'][cam_name] = rgb_tensor
-                    else:
-                        logging.warning(f"Failed to decode RGB for {traj_name}/{cam_name} frame {frame_idx}")
+                if str(rgb_path) in f:
+                    rgb_grp = f[str(rgb_path)]
+                    if isinstance(rgb_grp, h5py.Group) and "image_bytes" in rgb_grp:
+                        num_bytes = rgb_grp["frame_sizes"][frame_idx]
+                        encoded_frame = rgb_grp["image_bytes"][frame_idx, :num_bytes]
+                        img_tensor = torch.from_numpy(np.array(Image.open(io.BytesIO(encoded_frame))))
+                        result['rgb'][cam_name] = img_tensor.permute(2, 0, 1) # HWC to CHW
 
                 # Load camera pose
                 if "pose_in_world" in cam_group:
@@ -222,6 +217,19 @@ class EgocentricH5Dataset(BaseDatasetReader):
                 
                 if 'joint_names' in traj_group['skeleton'].attrs:
                     result['skeleton_joint_names'] = traj_group['skeleton'].attrs['joint_names']
+            
+            # --- Optionally load detected objects ---
+            objects_path = Path(traj_name) / "objects"
+            if str(objects_path) in f:
+                objects_grp = f[str(objects_path)]
+                if isinstance(objects_grp, h5py.Group):
+                    result['objects'] = {}
+                    for obj_label, obj_grp in objects_grp.items():
+                        if isinstance(obj_grp, h5py.Group):
+                            result['objects'][obj_label] = {
+                                'bboxes_2d': obj_grp['bboxes_2d'][frame_idx],
+                                'scores': obj_grp['scores'][frame_idx],
+                            }
             
             if self.transform is not None:
                 result = self.transform(result)
