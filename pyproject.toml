@@ -6,8 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "egohub"
 version = "0.1.0"
 description = "A toolkit for egocentric data processing, conversion, and visualization."
-authors = [{ name = "James Ball", email = "j.ball@surrey.ac.uk" }]
-license = { text = "MIT" }
+authors = [{ name = "James Ball", email = "james@istarirobotics.com }]
+license = { text = "MIT Custom" }
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
@@ -37,8 +37,7 @@ full = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/your-repo/egohub"
-"Bug Tracker" = "https://github.com/your-repo/egohub/issues"
+"Homepage" = "https://github.com/istarirobotics/egohub"
 
 [project.scripts]
 egohub = "egohub.cli.main:main"
