@@ -33,7 +33,7 @@ jobs:
 
       # ---------- Static Analysis ---------- #
       - name: Run Ruff (lint)
-        run: ruff egohub
+        run: ruff check egohub
 
       - name: Black formatting check
         run: black --check .
