@@ -1,0 +1,276 @@
+avp_links:
+- - 0
+  - 61
+- - 61
+  - 62
+- - 62
+  - 63
+- - 63
+  - 64
+- - 64
+  - 65
+- - 65
+  - 66
+- - 66
+  - 67
+- - 67
+  - 29
+- - 29
+  - 30
+- - 30
+  - 31
+- - 31
+  - 32
+- - 67
+  - 24
+- - 24
+  - 1
+- - 1
+  - 2
+- - 2
+  - 3
+- - 67
+  - 56
+- - 56
+  - 33
+- - 33
+  - 34
+- - 34
+  - 35
+- - 3
+  - 27
+- - 27
+  - 25
+- - 25
+  - 26
+- - 26
+  - 28
+- - 3
+  - 7
+- - 7
+  - 6
+- - 6
+  - 4
+- - 4
+  - 5
+- - 5
+  - 8
+- - 3
+  - 17
+- - 17
+  - 16
+- - 16
+  - 14
+- - 14
+  - 15
+- - 15
+  - 18
+- - 3
+  - 22
+- - 22
+  - 21
+- - 21
+  - 19
+- - 19
+  - 20
+- - 20
+  - 23
+- - 3
+  - 12
+- - 12
+  - 11
+- - 11
+  - 9
+- - 9
+  - 10
+- - 10
+  - 13
+- - 35
+  - 59
+- - 59
+  - 57
+- - 57
+  - 58
+- - 58
+  - 60
+- - 35
+  - 39
+- - 39
+  - 38
+- - 38
+  - 36
+- - 36
+  - 37
+- - 37
+  - 40
+- - 35
+  - 49
+- - 49
+  - 48
+- - 48
+  - 46
+- - 46
+  - 47
+- - 47
+  - 50
+- - 35
+  - 54
+- - 54
+  - 53
+- - 53
+  - 51
+- - 51
+  - 52
+- - 52
+  - 55
+- - 35
+  - 44
+- - 44
+  - 43
+- - 43
+  - 41
+- - 41
+  - 42
+- - 42
+  - 45
+hierarchy:
+  head: neck
+  left_ankle: left_knee
+  left_collar: spine3
+  left_elbow: left_shoulder
+  left_foot: left_ankle
+  left_hand_index_intermediate_base: left_hand_index_knuckle
+  left_hand_index_intermediate_tip: left_hand_index_intermediate_base
+  left_hand_index_knuckle: left_hand_index_metacarpal
+  left_hand_index_metacarpal: left_wrist
+  left_hand_index_tip: left_hand_index_intermediate_tip
+  left_hand_little_finger_intermediate_base: left_hand_little_finger_knuckle
+  left_hand_little_finger_intermediate_tip: left_hand_little_finger_intermediate_base
+  left_hand_little_finger_knuckle: left_hand_little_finger_metacarpal
+  left_hand_little_finger_metacarpal: left_wrist
+  left_hand_little_finger_tip: left_hand_little_finger_intermediate_tip
+  left_hand_middle_finger_intermediate_base: left_hand_middle_finger_knuckle
+  left_hand_middle_finger_intermediate_tip: left_hand_middle_finger_intermediate_base
+  left_hand_middle_finger_knuckle: left_hand_middle_finger_metacarpal
+  left_hand_middle_finger_metacarpal: left_wrist
+  left_hand_middle_finger_tip: left_hand_middle_finger_intermediate_tip
+  left_hand_ring_finger_intermediate_base: left_hand_ring_finger_knuckle
+  left_hand_ring_finger_intermediate_tip: left_hand_ring_finger_intermediate_base
+  left_hand_ring_finger_knuckle: left_hand_ring_finger_metacarpal
+  left_hand_ring_finger_metacarpal: left_wrist
+  left_hand_ring_finger_tip: left_hand_ring_finger_intermediate_tip
+  left_hand_thumb_intermediate_base: left_hand_thumb_knuckle
+  left_hand_thumb_intermediate_tip: left_hand_thumb_intermediate_base
+  left_hand_thumb_knuckle: left_wrist
+  left_hand_thumb_tip: left_hand_thumb_intermediate_tip
+  left_hip: pelvis
+  left_knee: left_hip
+  left_shoulder: left_collar
+  left_wrist: left_elbow
+  neck: spine3
+  right_ankle: right_knee
+  right_collar: spine3
+  right_elbow: right_shoulder
+  right_foot: right_ankle
+  right_hand_index_intermediate_base: right_hand_index_knuckle
+  right_hand_index_intermediate_tip: right_hand_index_intermediate_base
+  right_hand_index_knuckle: right_hand_index_metacarpal
+  right_hand_index_metacarpal: right_wrist
+  right_hand_index_tip: right_hand_index_intermediate_tip
+  right_hand_little_finger_intermediate_base: right_hand_little_finger_knuckle
+  right_hand_little_finger_intermediate_tip: right_hand_little_finger_intermediate_base
+  right_hand_little_finger_knuckle: right_hand_little_finger_metacarpal
+  right_hand_little_finger_metacarpal: right_wrist
+  right_hand_little_finger_tip: right_hand_little_finger_intermediate_tip
+  right_hand_middle_finger_intermediate_base: right_hand_middle_finger_knuckle
+  right_hand_middle_finger_intermediate_tip: right_hand_middle_finger_intermediate_base
+  right_hand_middle_finger_knuckle: right_hand_middle_finger_metacarpal
+  right_hand_middle_finger_metacarpal: right_wrist
+  right_hand_middle_finger_tip: right_hand_middle_finger_intermediate_tip
+  right_hand_ring_finger_intermediate_base: right_hand_ring_finger_knuckle
+  right_hand_ring_finger_intermediate_tip: right_hand_ring_finger_intermediate_base
+  right_hand_ring_finger_knuckle: right_hand_ring_finger_metacarpal
+  right_hand_ring_finger_metacarpal: right_wrist
+  right_hand_ring_finger_tip: right_hand_ring_finger_intermediate_tip
+  right_hand_thumb_intermediate_base: right_hand_thumb_knuckle
+  right_hand_thumb_intermediate_tip: right_hand_thumb_intermediate_base
+  right_hand_thumb_knuckle: right_wrist
+  right_hand_thumb_tip: right_hand_thumb_intermediate_tip
+  right_hip: pelvis
+  right_knee: right_hip
+  right_shoulder: right_collar
+  right_wrist: right_elbow
+  spine1: pelvis
+  spine2: spine1
+  spine3: spine2
+joints:
+- pelvis
+- left_hip
+- right_hip
+- spine1
+- left_knee
+- right_knee
+- spine2
+- left_ankle
+- right_ankle
+- spine3
+- left_foot
+- right_foot
+- neck
+- left_collar
+- right_collar
+- head
+- left_shoulder
+- right_shoulder
+- left_elbow
+- right_elbow
+- left_wrist
+- right_wrist
+- left_hand_index_metacarpal
+- left_hand_index_knuckle
+- left_hand_index_intermediate_base
+- left_hand_index_intermediate_tip
+- left_hand_index_tip
+- left_hand_little_finger_metacarpal
+- left_hand_little_finger_knuckle
+- left_hand_little_finger_intermediate_base
+- left_hand_little_finger_intermediate_tip
+- left_hand_little_finger_tip
+- left_hand_middle_finger_metacarpal
+- left_hand_middle_finger_knuckle
+- left_hand_middle_finger_intermediate_base
+- left_hand_middle_finger_intermediate_tip
+- left_hand_middle_finger_tip
+- left_hand_ring_finger_metacarpal
+- left_hand_ring_finger_knuckle
+- left_hand_ring_finger_intermediate_base
+- left_hand_ring_finger_intermediate_tip
+- left_hand_ring_finger_tip
+- left_hand_thumb_knuckle
+- left_hand_thumb_intermediate_base
+- left_hand_thumb_intermediate_tip
+- left_hand_thumb_tip
+- right_hand_index_metacarpal
+- right_hand_index_knuckle
+- right_hand_index_intermediate_base
+- right_hand_index_intermediate_tip
+- right_hand_index_tip
+- right_hand_little_finger_metacarpal
+- right_hand_little_finger_knuckle
+- right_hand_little_finger_intermediate_base
+- right_hand_little_finger_intermediate_tip
+- right_hand_little_finger_tip
+- right_hand_middle_finger_metacarpal
+- right_hand_middle_finger_knuckle
+- right_hand_middle_finger_intermediate_base
+- right_hand_middle_finger_intermediate_tip
+- right_hand_middle_finger_tip
+- right_hand_ring_finger_metacarpal
+- right_hand_ring_finger_knuckle
+- right_hand_ring_finger_intermediate_base
+- right_hand_ring_finger_intermediate_tip
+- right_hand_ring_finger_tip
+- right_hand_thumb_knuckle
+- right_hand_thumb_intermediate_base
+- right_hand_thumb_intermediate_tip
+- right_hand_thumb_tip

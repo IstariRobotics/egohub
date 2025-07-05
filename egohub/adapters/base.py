@@ -4,6 +4,9 @@ Base classes for dataset adapters.
 from abc import ABC, abstractmethod
 from pathlib import Path
 import logging
+import yaml
+from egohub.schema import Trajectory
+from typing import Dict, Any, Optional, List
 
 import h5py
 from tqdm import tqdm
@@ -18,10 +21,45 @@ class BaseAdapter(ABC):
     interface and a common run loop for all adapters.
     """
 
-    def __init__(self, raw_dir: Path, output_file: Path):
+    name: str = ""
+
+    def __init__(self, raw_dir: Path, output_file: Path, config: Optional[Dict[str, Any]] = None):
         self.raw_dir = raw_dir
         self.output_file = output_file
+        self.config = config or self._load_config()
         logging.info(f"Starting adapter: {self.__class__.__name__}")
+
+    def _load_config(self) -> dict:
+        """Loads the adapter-specific YAML configuration file."""
+        if not self.name:
+            logging.warning(f"Adapter '{self.__class__.__name__}' has no name. Skipping config load.")
+            return {}
+
+        # Assuming the script is run from the project root
+        config_path = Path(f"configs/{self.name}.yaml")
+        if not config_path.exists():
+            logging.warning(f"No config file found for adapter '{self.name}' at {config_path}.")
+            return {}
+
+        logging.info(f"Loading configuration from {config_path}...")
+        with open(config_path, 'r') as f:
+            try:
+                return yaml.safe_load(f)
+            except yaml.YAMLError as e:
+                logging.error(f"Error parsing YAML file {config_path}: {e}")
+                raise
+
+    @property
+    @abstractmethod
+    def source_joint_names(self) -> List[str]:
+        """Returns the list of joint names for the source skeleton."""
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def source_skeleton_hierarchy(self) -> Dict[str, str]:
+        """Returns the kinematic hierarchy for the source skeleton."""
+        raise NotImplementedError
 
     @abstractmethod
     def discover_sequences(self) -> list[dict]:

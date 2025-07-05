@@ -6,12 +6,100 @@ import h5py
 import numpy as np
 
 from egohub.adapters.base import BaseAdapter
-from egohub.schema import CANONICAL_DATA_STREAMS_TEMPLATE
+from egohub.schema import CANONICAL_DATA_STREAMS_TEMPLATE, Trajectory
 from egohub.transforms import TransformPipeline
 from egohub.transforms.coordinates import arkit_to_canonical_poses
+from egohub.processing.skeleton import remap_skeleton
+from egohub.processing.synchronization import generate_indices
+from egohub.constants import EGODEX_SKELETON_JOINTS, EGODEX_SKELETON_HIERARCHY
+
+# Defines the mapping from the EgoDex source skeleton to the canonical skeleton.
+# This is necessary because the joint names and structure differ.
+EGODEX_TO_CANONICAL_SKELETON_MAP = {
+    # Body
+    'hip': 'pelvis',
+    'spine1': 'spine1',
+    'spine2': 'spine2',
+    'spine3': 'spine3',
+    'neck1': 'neck',
+    'neck4': 'head',
+
+    # Left Arm
+    'leftShoulder': 'left_shoulder',
+    'leftArm': 'left_elbow',
+    'leftForearm': 'left_wrist', # EgoDex `leftForearm` is closer to the wrist
+    'leftHand': 'left_wrist',
+
+    # Right Arm
+    'rightShoulder': 'right_shoulder',
+    'rightArm': 'right_elbow',
+    'rightForearm': 'right_wrist', # EgoDex `rightForearm` is closer to the wrist
+    'rightHand': 'right_wrist',
+
+    # Left Hand Fingers
+    'leftIndexFingerMetacarpal': 'left_hand_index_metacarpal',
+    'leftIndexFingerKnuckle': 'left_hand_index_knuckle',
+    'leftIndexFingerIntermediateBase': 'left_hand_index_intermediate_base',
+    'leftIndexFingerIntermediateTip': 'left_hand_index_intermediate_tip',
+    'leftIndexFingerTip': 'left_hand_index_tip',
+    'leftLittleFingerMetacarpal': 'left_hand_little_finger_metacarpal',
+    'leftLittleFingerKnuckle': 'left_hand_little_finger_knuckle',
+    'leftLittleFingerIntermediateBase': 'left_hand_little_finger_intermediate_base',
+    'leftLittleFingerIntermediateTip': 'left_hand_little_finger_intermediate_tip',
+    'leftLittleFingerTip': 'left_hand_little_finger_tip',
+    'leftMiddleFingerMetacarpal': 'left_hand_middle_finger_metacarpal',
+    'leftMiddleFingerKnuckle': 'left_hand_middle_finger_knuckle',
+    'leftMiddleFingerIntermediateBase': 'left_hand_middle_finger_intermediate_base',
+    'leftMiddleFingerIntermediateTip': 'left_hand_middle_finger_intermediate_tip',
+    'leftMiddleFingerTip': 'left_hand_middle_finger_tip',
+    'leftRingFingerMetacarpal': 'left_hand_ring_finger_metacarpal',
+    'leftRingFingerKnuckle': 'left_hand_ring_finger_knuckle',
+    'leftRingFingerIntermediateBase': 'left_hand_ring_finger_intermediate_base',
+    'leftRingFingerIntermediateTip': 'left_hand_ring_finger_intermediate_tip',
+    'leftRingFingerTip': 'left_hand_ring_finger_tip',
+    'leftThumbKnuckle': 'left_hand_thumb_knuckle',
+    'leftThumbIntermediateBase': 'left_hand_thumb_intermediate_base',
+    'leftThumbIntermediateTip': 'left_hand_thumb_intermediate_tip',
+    'leftThumbTip': 'left_hand_thumb_tip',
+
+    # Right Hand Fingers
+    'rightIndexFingerMetacarpal': 'right_hand_index_metacarpal',
+    'rightIndexFingerKnuckle': 'right_hand_index_knuckle',
+    'rightIndexFingerIntermediateBase': 'right_hand_index_intermediate_base',
+    'rightIndexFingerIntermediateTip': 'right_hand_index_intermediate_tip',
+    'rightIndexFingerTip': 'right_hand_index_tip',
+    'rightLittleFingerMetacarpal': 'right_hand_little_finger_metacarpal',
+    'rightLittleFingerKnuckle': 'right_hand_little_finger_knuckle',
+    'rightLittleFingerIntermediateBase': 'right_hand_little_finger_intermediate_base',
+    'rightLittleFingerIntermediateTip': 'right_hand_little_finger_intermediate_tip',
+    'rightLittleFingerTip': 'right_hand_little_finger_tip',
+    'rightMiddleFingerMetacarpal': 'right_hand_middle_finger_metacarpal',
+    'rightMiddleFingerKnuckle': 'right_hand_middle_finger_knuckle',
+    'rightMiddleFingerIntermediateBase': 'right_hand_middle_finger_intermediate_base',
+    'rightMiddleFingerIntermediateTip': 'right_hand_middle_finger_intermediate_tip',
+    'rightMiddleFingerTip': 'right_hand_middle_finger_tip',
+    'rightRingFingerMetacarpal': 'right_hand_ring_finger_metacarpal',
+    'rightRingFingerKnuckle': 'right_hand_ring_finger_knuckle',
+    'rightRingFingerIntermediateBase': 'right_hand_ring_finger_intermediate_base',
+    'rightRingFingerIntermediateTip': 'right_hand_ring_finger_intermediate_tip',
+    'rightRingFingerTip': 'right_hand_ring_finger_tip',
+    'rightThumbKnuckle': 'right_hand_thumb_knuckle',
+    'rightThumbIntermediateBase': 'right_hand_thumb_intermediate_base',
+    'rightThumbIntermediateTip': 'right_hand_thumb_intermediate_tip',
+    'rightThumbTip': 'right_hand_thumb_tip',
+}
 
 class EgoDexAdapter(BaseAdapter):
     """Adapter for the EgoDex dataset."""
+    name = "egodex"
+
+    @property
+    def source_joint_names(self) -> list[str]:
+        return EGODEX_SKELETON_JOINTS
+
+    @property
+    def source_skeleton_hierarchy(self) -> dict[str, str]:
+        return EGODEX_SKELETON_HIERARCHY
 
     def discover_sequences(self) -> list[dict]:
         """
@@ -64,13 +152,16 @@ class EgoDexAdapter(BaseAdapter):
             found_streams.add("metadata/action_label")
 
             # --- Timestamps ---
-            num_frames = 0
+            # EgoDex does not provide explicit timestamps, so we generate them.
+            # We assume a constant frame rate of 30 FPS for all streams.
+            num_frames_source = 0
             camera_transforms = f_in.get('transforms/camera')
             if isinstance(camera_transforms, h5py.Dataset):
-                num_frames = camera_transforms.shape[0]
+                num_frames_source = camera_transforms.shape[0]
             
-            timestamps_ns = np.arange(num_frames) * (1e9 / 30.0)
-            metadata_group.create_dataset("timestamps_ns", data=timestamps_ns.astype(np.uint64))
+            # Master timestamps are the definitive timeline for the trajectory.
+            master_timestamps_ns = np.arange(num_frames_source) * (1e9 / 30.0)
+            metadata_group.create_dataset("timestamps_ns", data=master_timestamps_ns.astype(np.uint64))
             found_streams.add("metadata/timestamps_ns")
 
             # --- Camera Data ---
@@ -102,6 +193,11 @@ class EgoDexAdapter(BaseAdapter):
                 ego_camera_group.create_dataset("pose_in_world", data=canonical_camera_poses)
                 found_streams.add("cameras/ego_camera/pose_in_world")
 
+                # Generate and save pose indices
+                stream_timestamps_ns = np.arange(raw_camera_poses.shape[0]) * (1e9 / 30.0)
+                pose_indices = generate_indices(master_timestamps_ns, stream_timestamps_ns)
+                ego_camera_group.create_dataset("pose_indices", data=pose_indices)
+
             # --- Hand Data ---
             hands_group = traj_group.create_group("hands")
             for hand in ['left', 'right']:
@@ -117,6 +213,11 @@ class EgoDexAdapter(BaseAdapter):
 
                     hand_group.create_dataset("pose_in_world", data=canonical_hand_poses)
                     found_streams.add(f"hands/{hand}/pose_in_world")
+
+                    # Generate and save pose indices
+                    stream_timestamps_ns = np.arange(raw_hand_poses.shape[0]) * (1e9 / 30.0)
+                    pose_indices = generate_indices(master_timestamps_ns, stream_timestamps_ns)
+                    hand_group.create_dataset("pose_indices", data=pose_indices)
                 else:
                     logging.warning(f"No '{source_key}' data found in {seq_info['hdf5_path']}")
 
@@ -126,35 +227,52 @@ class EgoDexAdapter(BaseAdapter):
             confidences_group = f_in.get('confidences')
             
             if isinstance(transforms_group, h5py.Group) and isinstance(confidences_group, h5py.Group):
-                joint_names = sorted([name for name in transforms_group.keys() if name != 'camera'])
+                
+                # Use the pre-defined list of joints for EgoDex
+                joint_names = self.source_joint_names
+                
                 if joint_names:
-                    skeleton_group.attrs['joint_names'] = joint_names
                     positions_list, confidences_list = [], []
                     for joint_name in joint_names:
                         joint_transform = transforms_group.get(joint_name)
                         if isinstance(joint_transform, h5py.Dataset):
+                            # Extract the translation part of the 4x4 matrix
                             positions_list.append(joint_transform[:, :3, 3])
                         else:
-                            positions_list.append(np.zeros((num_frames, 3), dtype=np.float32))
+                            # If a joint is missing, fill with zeros for now
+                            positions_list.append(np.zeros((num_frames_source, 3), dtype=np.float32))
                         
                         joint_conf = confidences_group.get(joint_name)
                         if isinstance(joint_conf, h5py.Dataset):
                             confidences_list.append(joint_conf[:])
                         else:
-                            confidences_list.append(np.zeros(num_frames, dtype=np.float32))
+                            confidences_list.append(np.zeros(num_frames_source, dtype=np.float32))
                     
                     if positions_list and confidences_list:
-                        all_positions_raw = np.stack(positions_list, axis=1)
+                        source_positions = np.stack(positions_list, axis=1)
                         all_confidences = np.stack(confidences_list, axis=1)
 
-                        # Reuse the same pipeline
+                        # 1. Transform coordinates from ARKit to our canonical system
                         pose_pipeline = TransformPipeline([arkit_to_canonical_poses])
-                        all_positions_canonical = pose_pipeline(all_positions_raw)
+                        source_positions_canonical_coords = pose_pipeline(source_positions)
 
-                        skeleton_group.create_dataset("positions", data=all_positions_canonical.astype(np.float32))
+                        # 2. Remap the skeleton to the canonical joint definition
+                        canonical_positions, canonical_confidences = remap_skeleton(
+                            source_positions=source_positions_canonical_coords,
+                            source_confidences=all_confidences,
+                            source_joint_names=self.source_joint_names,
+                            joint_map=EGODEX_TO_CANONICAL_SKELETON_MAP
+                        )
+
+                        skeleton_group.create_dataset("positions", data=canonical_positions.astype(np.float32))
                         found_streams.add("skeleton/positions")
-                        skeleton_group.create_dataset("confidences", data=all_confidences.astype(np.float32))
+                        skeleton_group.create_dataset("confidences", data=canonical_confidences.astype(np.float32))
                         found_streams.add("skeleton/confidences")
+
+                        # Generate and save frame indices
+                        stream_timestamps_ns = np.arange(source_positions.shape[0]) * (1e9 / 30.0)
+                        frame_indices = generate_indices(master_timestamps_ns, stream_timestamps_ns)
+                        skeleton_group.create_dataset("frame_indices", data=frame_indices)
 
             # --- RGB Data ---
             rgb_group = ego_camera_group.create_group("rgb")
@@ -176,5 +294,10 @@ class EgoDexAdapter(BaseAdapter):
                         image_dataset[i] = np.frombuffer(padded_frame, dtype=np.uint8)
                     rgb_group.create_dataset("frame_sizes", data=[len(f) for f in temp_frames], dtype=np.int32)
                     found_streams.add("cameras/ego_camera/rgb/image_bytes")
+
+                    # Generate and save frame indices
+                    stream_timestamps_ns = np.arange(len(temp_frames)) * (1e9 / 30.0)
+                    frame_indices = generate_indices(master_timestamps_ns, stream_timestamps_ns)
+                    rgb_group.create_dataset("frame_indices", data=frame_indices)
 
         logging.info(f"Finished processing sequence. Found streams: {sorted(list(found_streams))}") 
