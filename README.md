@@ -7,6 +7,8 @@
 
 An end-to-end Python pipeline for ingesting, normalizing, and serving egocentric datasets for humanoid robotics research in a unified state and action format.
 
+[DeepWiki Link](https://deepwiki.com/IstariRobotics/egohub/)
+
 ## Architecture
 
 ```mermaid
