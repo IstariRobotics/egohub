@@ -17,6 +17,8 @@ dependencies = [
     "Pillow",
     "PyYAML",
     "rerun-sdk==0.16.0",
+    "scipy",
+    "timm",
     "torch",
     "transformers",
     "tqdm",
