@@ -25,41 +25,63 @@ The `egohub` pipeline is designed around a set of core principles to ensure it i
 
 ```mermaid
 graph TD
-    %% Define Styles
-    classDef built fill:#d4edda,stroke:#155724,stroke-width:2px
-    classDef notBuilt fill:#f8f9fa,stroke:#6c757d,stroke-width:2px,stroke-dasharray: 5 5
+%% Define Styles
+classDef built fill:#d4edda,stroke:#155724,stroke-width:2px
+classDef notBuilt fill:#f8f9fa,stroke:#6c757d,stroke-width:2px,stroke-dasharray: 5 5
 
-    subgraph "Stage 1: Ingest (Adapters)"
+subgraph "Egocentric Data Processing Pipeline"
+    direction LR
+
+    subgraph "Stage 1: Ingest"
         direction LR
         RawData["Raw Data Source<br/>(e.g., EgoDex)"] --> Adapter["Ingestion Adapter<br/>(EgoDexAdapter)"]
     end
 
     subgraph "Stage 2: Re-express & Standardize"
-        Adapter --> CanonicalH5["Canonical HDF5 File<br/><b>(Defined by schema.py)</b>"]
+        Adapter --> CanonicalH5{"Canonical HDF5 File<br/>(Universal Human Rig)"}
     end
 
-    subgraph "Stage 3: Enrich (Tools)"
-        ToolDetection["Object Detection Tool<br/>(HuggingFaceObjectDetectionTool)"]
-        
+    subgraph "Stage 3: Enrich"
+        direction TB
+        ToolDetection["Object Detection Tool"]
+        ToolDepth["Depth Estimation Tool<br/>(Future Work)"]
+    
         CanonicalH5 -->|Reads video| ToolDetection
-        ToolDetection -->|Writes 'objects' group| CanonicalH5
+        ToolDetection -->|Writes object data| CanonicalH5
+        CanonicalH5 -.-> ToolDepth
     end
 
     subgraph "Stage 4: Consume"
         direction TB
-        AppPytorch["PyTorch Datasets"]
-        AppRerun["Rerun Visualizer"]
-        AppSim["Robotics Simulator<br/>(Future Work)"]
+
+        subgraph "Visualization & Debugging"
+            AppRerun["Rerun Visualizer"]
+        end
+    
+        subgraph "Training Pipeline (Self-Supervised)"
+            direction TB
+            PytorchDS["PyTorch Dataset<br/>(EgocentricH5Dataset)"] --> VAE["1.Train MultimodalVAE"]
+            VAE --> LatentH5{"Latent HDF5 File"}
+            LatentH5 --> Policy["2.Pre-train LatentPolicyModel"]
+        end
+
+        subgraph "Downstream Applications"
+            AppSim["Robotics Simulator<br/>(Future Work)"]
+            AppFinetune["Fine-tuning on Tasks<br/>(Future Work)"]
+        end
     end
 
-    %% Define Flows
-    CanonicalH5 --> AppPytorch
-    CanonicalH5 --> AppRerun
-    CanonicalH5 --> AppSim
+end
 
-    %% Apply Styles to Nodes
-    class RawData,Adapter,CanonicalH5,AppPytorch,AppRerun,ToolDetection built
-    class AppSim notBuilt
+%% Define Flows
+CanonicalH5 --> PytorchDS
+CanonicalH5 --> AppRerun
+Policy -.-> AppFinetune
+CanonicalH5 -.-> AppSim
+
+%% Apply Styles to Nodes
+class RawData,Adapter,CanonicalH5,PytorchDS,VAE,LatentH5,Policy,AppRerun,ToolDetection built
+class ToolDepth,AppSim,AppFinetune notBuilt
 ```
 _Completed modules marked in green; future work marked in grey._
 
