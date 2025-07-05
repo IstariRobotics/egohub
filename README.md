@@ -32,11 +32,11 @@ subgraph "Egocentric Data Processing Pipeline"
     subgraph "Stage 3: Enrich"
         direction TB
         ToolDetection["HuggingFace Model Tools"]
-        ToolDepth["Depth Estimation Tool<br/>(Future Work)"]
+        ToolOther["Other Tools<br/>(Future Work)"]
     
         CanonicalH5 -->|Reads data| ToolDetection
         ToolDetection -->|Writes object data| CanonicalH5
-        CanonicalH5 -.-> ToolDepth
+        CanonicalH5 -.-> ToolOther
     end
 
     subgraph "Stage 4: Consume"
@@ -69,7 +69,7 @@ CanonicalH5 -.-> AppSim
 
 %% Apply Styles to Nodes
 class RawData,Adapter,CanonicalH5,PytorchDS,VAE,LatentH5,Policy,AppRerun,ToolDetection built
-class ToolDepth,AppSim,AppFinetune notBuilt
+class ToolOther,AppSim,AppFinetune notBuilt
 ```
 _Completed modules marked in green; future work marked in grey._
 
