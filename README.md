@@ -204,6 +204,8 @@ This table lists the datasets currently supported by `egohub` for ingestion. We 
 | :----------- | :------------- | :---------------- | :----------------------------------------------------- |
 | **EgoDex**   | `egodex`       | `EgoDexAdapter`   | Supports video, camera pose, and hand/skeleton poses. |
 
+Instructions on downoading datasets can be found in `README_DATASETS.md`.
+
 ## Supported Tools
 
 This table lists the enrichment tools available for post-processing canonical HDF5 files.
