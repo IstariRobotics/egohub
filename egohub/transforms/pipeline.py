@@ -1,4 +1,5 @@
-from typing import Callable, List, Any
+from typing import Any, Callable, List
+
 
 class TransformPipeline:
     """
@@ -30,4 +31,4 @@ class TransformPipeline:
         """
         for transform in self.transforms:
             data = transform(data)
-        return data 
+        return data

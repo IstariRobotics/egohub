@@ -1,10 +1,11 @@
 """
 Base classes for data exporters.
 """
+
+import argparse
+import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
-import logging
-import argparse
 
 from egohub.datasets import EgocentricH5Dataset
 
@@ -40,8 +41,12 @@ class BaseExporter(ABC):
         """
         parser = argparse.ArgumentParser(description=self.__doc__)
         parser.add_argument("h5_path", help="Path to the input canonical HDF5 file.")
-        parser.add_argument("--output_path", help="Optional path for the exported file(s).")
-        parser.add_argument("--trajectories", nargs='*', help="Specific trajectory names to process.")
+        parser.add_argument(
+            "--output_path", help="Optional path for the exported file(s)."
+        )
+        parser.add_argument(
+            "--trajectories", nargs="*", help="Specific trajectory names to process."
+        )
         return parser
 
     def run_from_main(self):
@@ -49,8 +54,10 @@ class BaseExporter(ABC):
         Main entry point for running the exporter from a script.
         This method handles argument parsing and dataset loading.
         """
-        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-        
+        logging.basicConfig(
+            level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+        )
+
         parser = self.get_arg_parser()
         args = parser.parse_args()
 
@@ -64,11 +71,10 @@ class BaseExporter(ABC):
 
         # Dataset loading is handled here
         dataset = EgocentricH5Dataset(
-            h5_path,
-            trajectories=arg_dict.get('trajectories')
+            h5_path, trajectories=arg_dict.get("trajectories")
         )
 
-        output_path_str = arg_dict.pop('output_path', None)
+        output_path_str = arg_dict.pop("output_path", None)
         output_path = Path(output_path_str) if output_path_str else None
 
-        self.export(dataset, output_path, **arg_dict) 
+        self.export(dataset, output_path, **arg_dict)

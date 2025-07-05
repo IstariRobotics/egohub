@@ -6,17 +6,17 @@ to ensure optimal performance with Rerun visualization.
 """
 
 import atexit
+import io
 import subprocess
 import tempfile
 from pathlib import Path
 from timeit import default_timer as timer
-from typing import Literal, Iterator
+from typing import Iterator, Literal
 
 import cv2
 import h5py
 import numpy as np
 from PIL import Image
-import io
 
 
 def create_temp_video_from_img_dir(
@@ -77,24 +77,22 @@ def create_temp_video_from_img_dir(
 
     if quality == "optimal":
         # H.264 settings for "optimal" quality (fallback from AV1)
-        cmd_encoder_specific.extend(
-            [
-                "-c:v",
-                "libx264",
-                "-preset",
-                "medium",  # Balanced preset for H.264
-                "-crf",
-                "23",  # Constant Rate Factor for quality control
-                "-g",
-                "30",  # Keyframe interval
-                "-bf",
-                "3",  # B-frames
-                "-pix_fmt",
-                "yuv420p",  # Standard pixel format
-                "-c:a",
-                "copy",  # Copy audio stream without re-encoding
-            ]
-        )
+        cmd_encoder_specific.extend([
+            "-c:v",
+            "libx264",
+            "-preset",
+            "medium",  # Balanced preset for H.264
+            "-crf",
+            "23",  # Constant Rate Factor for quality control
+            "-g",
+            "30",  # Keyframe interval
+            "-bf",
+            "3",  # B-frames
+            "-pix_fmt",
+            "yuv420p",  # Standard pixel format
+            "-c:a",
+            "copy",  # Copy audio stream without re-encoding
+        ])
     else:
         # H.264 NVENC settings for other quality levels
         quality_settings = {
@@ -104,28 +102,26 @@ def create_temp_video_from_img_dir(
             "max": ("p1", "12"),
         }
         preset, cq_h264 = quality_settings[quality]
-        cmd_encoder_specific.extend(
-            [
-                "-c:v",
-                "h264_nvenc",
-                "-preset",
-                preset,
-                "-rc:v",
-                "vbr_hq",  # High quality variable bitrate mode
-                "-cq",
-                cq_h264,  # Quality level
-                "-b:v",
-                "0",  # Let CQ control bitrate
-                "-profile:v",
-                "high",  # High profile for better compression
-                "-g",
-                "30",  # Keyframe interval for H.264
-                "-bf",
-                "3",  # Maximum 3 B-frames between reference frames
-                "-pix_fmt",
-                "yuv420p",  # Standard pixel format for compatibility
-            ]
-        )
+        cmd_encoder_specific.extend([
+            "-c:v",
+            "h264_nvenc",
+            "-preset",
+            preset,
+            "-rc:v",
+            "vbr_hq",  # High quality variable bitrate mode
+            "-cq",
+            cq_h264,  # Quality level
+            "-b:v",
+            "0",  # Let CQ control bitrate
+            "-profile:v",
+            "high",  # High profile for better compression
+            "-g",
+            "30",  # Keyframe interval for H.264
+            "-bf",
+            "3",  # Maximum 3 B-frames between reference frames
+            "-pix_fmt",
+            "yuv420p",  # Standard pixel format for compatibility
+        ])
 
     # Combine base command, encoder specific commands, and output path
     cmd: list[str] = cmd_base + cmd_encoder_specific + [str(output_path)]
@@ -144,34 +140,17 @@ def create_temp_video_from_img_dir(
     return output_path
 
 
-def reencode_video_optimal(
+def _setup_output_path(
     input_video_path: Path,
-    delete_on_exit: bool = True,
-    save_file: bool = False,
-    output_directory: Path | None = None,
-    repair_corrupted: bool = True,
+    save_file: bool,
+    output_directory: Path | None,
+    delete_on_exit: bool,
 ) -> Path:
-    """Re-encode an existing video file to AV1 using optimal NVIDIA GPU accelerated settings.
-
-    Args:
-        input_video_path: Path to the input video file.
-        delete_on_exit: Whether to delete the temporary output file when the program exits.
-                        Only applicable if save_file is False.
-        save_file: If True, saves the output video in the same directory as the input
-                   or in output_directory if specified, with "_optimal.mp4" suffix.
-                   If False, creates a temporary file.
-        output_directory: Directory to save the output file if save_file is True.
-                          If None, input_video_path.parent is used.
-        repair_corrupted: Whether to attempt to repair corrupted videos by adding error tolerance.
-
-    Returns:
-        Path to the re-encoded video file.
-    """
-    if not input_video_path.is_file():
-        raise FileNotFoundError(f"Input video file not found: {input_video_path}")
-
+    """Set up the output path for the re-encoded video."""
     if not save_file:
-        with tempfile.NamedTemporaryFile(suffix="_optimal.mp4", delete=False) as temp_file:
+        with tempfile.NamedTemporaryFile(
+            suffix="_optimal.mp4", delete=False
+        ) as temp_file:
             output_path = Path(temp_file.name)
         if delete_on_exit:
             atexit.register(lambda p: p.unlink(missing_ok=True), output_path)
@@ -181,132 +160,161 @@ def reencode_video_optimal(
         out_dir.mkdir(parents=True, exist_ok=True)
         output_path = out_dir / f"{base_name}_optimal.mp4"
 
-    # Build ffmpeg command base with error tolerance for corrupted videos
-    cmd_base: list[str] = [
-        "ffmpeg",
-        "-y",
-    ]
-    
-    # Add error tolerance for corrupted videos
+    return output_path
+
+
+def _build_ffmpeg_base_command(
+    input_video_path: Path, repair_corrupted: bool
+) -> list[str]:
+    """Build the base FFmpeg command with error tolerance options."""
+    cmd_base = ["ffmpeg", "-y"]
+
     if repair_corrupted:
         cmd_base.extend([
-            "-err_detect", "ignore_err",  # Ignore errors and continue
-            "-fflags", "+genpts+igndts",  # Generate timestamps and ignore decode timestamps
+            "-err_detect", "ignore_err",
+            "-fflags", "+genpts+igndts",
         ])
-    
-    cmd_base.extend([
-        "-i",
-        str(input_video_path),
-    ])
 
-    # Try AV1 NVENC first
-    cmd_encoder_specific: list[str] = [
-        "-c:v",
-        "av1_nvenc",
-        "-preset",
-        "p5",  # Balanced preset for AV1 NVENC
-        "-cq",
-        "30",  # Constant Quality level
-        "-g",
-        "2",  # Keyframe interval
-        "-bf",
-        "0",  # Set B-frames to 0 to satisfy GOP length constraint
-        "-pix_fmt",
-        "yuv420p",  # Standard pixel format
-        "-c:a",
-        "copy",  # Copy audio stream without re-encoding
+    cmd_base.extend(["-i", str(input_video_path)])
+    return cmd_base
+
+
+def _build_av1_encoder_command() -> list[str]:
+    """Build FFmpeg command for AV1 NVENC encoding."""
+    return [
+        "-c:v", "av1_nvenc",
+        "-preset", "p5",
+        "-cq", "30",
+        "-g", "2",
+        "-bf", "0",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "copy",
     ]
 
-    # Combine base command, encoder specific commands, and output path
-    cmd: list[str] = cmd_base + cmd_encoder_specific + [str(output_path)]
 
-    # Execute FFmpeg
+def _build_h264_encoder_command() -> list[str]:
+    """Build FFmpeg command for H.264 encoding."""
+    return [
+        "-c:v", "libx264",
+        "-preset", "medium",
+        "-crf", "23",
+        "-g", "30",
+        "-bf", "3",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "copy",
+    ]
+
+
+def _build_max_tolerance_command(
+    input_video_path: Path, output_path: Path
+) -> list[str]:
+    """Build FFmpeg command with maximum error tolerance."""
+    return [
+        "ffmpeg", "-y",
+        "-err_detect", "ignore_err",
+        "-fflags", "+genpts+igndts+discardcorrupt",
+        "-i", str(input_video_path),
+        "-c:v", "libx264",
+        "-preset", "ultrafast",
+        "-crf", "28",
+        "-g", "1",
+        "-bf", "0",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "copy",
+        str(output_path),
+    ]
+
+
+def _execute_ffmpeg_command(cmd: list[str], encoder_name: str) -> tuple[bool, str]:
+    """Execute FFmpeg command and return success status and error message."""
     start_time = timer()
     process = subprocess.run(cmd, capture_output=True)
     end_time = timer()
 
-    if process.returncode == 0:
-        print(f"FFmpeg re-encoding to optimal AV1 completed in {end_time - start_time:.2f} seconds.")
-        return output_path
+    success = process.returncode == 0
+    error_msg = process.stderr.decode() if not success else ""
+
+    if success:
+        print(
+            f"FFmpeg re-encoding to {encoder_name} completed in "
+            f"{end_time - start_time:.2f} seconds."
+        )
     else:
-        print(f"AV1 NVENC failed, falling back to H.264...")
-        error_msg = process.stderr.decode()
-        print(f"AV1 error: {error_msg}")
-        
-        # Clean up temp file if error occurs and it was a temp file
-        if not save_file and output_path.exists():
-            output_path.unlink()
-        
-        # Fallback to H.264 with error tolerance
-        cmd_encoder_specific_h264: list[str] = [
-            "-c:v",
-            "libx264",
-            "-preset",
-            "medium",  # Balanced preset for H.264
-            "-crf",
-            "23",  # Constant Rate Factor for quality control
-            "-g",
-            "30",  # Keyframe interval
-            "-bf",
-            "3",  # B-frames
-            "-pix_fmt",
-            "yuv420p",  # Standard pixel format
-            "-c:a",
-            "copy",  # Copy audio stream without re-encoding
-        ]
-        
-        cmd_h264: list[str] = cmd_base + cmd_encoder_specific_h264 + [str(output_path)]
-        
-        # Execute H.264 fallback
-        start_time = timer()
-        process = subprocess.run(cmd_h264, capture_output=True)
-        end_time = timer()
-        
-        print(f"FFmpeg re-encoding to H.264 completed in {end_time - start_time:.2f} seconds.")
-        
-        if process.returncode != 0:
-            error_msg = process.stderr.decode()
-            print(f"H.264 error: {error_msg}")
-            
-            # If still failing, try with even more aggressive error tolerance
-            if repair_corrupted:
-                print("Attempting with maximum error tolerance...")
-                cmd_max_tolerance = [
-                    "ffmpeg",
-                    "-y",
-                    "-err_detect", "ignore_err",
-                    "-fflags", "+genpts+igndts+discardcorrupt",
-                    "-i", str(input_video_path),
-                    "-c:v", "libx264",
-                    "-preset", "ultrafast",  # Fastest preset
-                    "-crf", "28",  # Lower quality but more tolerant
-                    "-g", "1",  # Keyframe every frame
-                    "-bf", "0",  # No B-frames
-                    "-pix_fmt", "yuv420p",
-                    "-c:a", "copy",
-                    str(output_path)
-                ]
-                
-                start_time = timer()
-                process = subprocess.run(cmd_max_tolerance, capture_output=True)
-                end_time = timer()
-                
-                print(f"FFmpeg re-encoding with max tolerance completed in {end_time - start_time:.2f} seconds.")
-                
-                if process.returncode != 0:
-                    error_msg = process.stderr.decode()
-                    # Clean up temp file if error occurs and it was a temp file
-                    if not save_file and output_path.exists():
-                        output_path.unlink()
-                    raise RuntimeError(f"FFmpeg re-encoding failed even with maximum error tolerance: {error_msg}")
-            
-            else:
-                # Clean up temp file if error occurs and it was a temp file
-                if not save_file and output_path.exists():
-                    output_path.unlink()
-                raise RuntimeError(f"FFmpeg re-encoding failed: {error_msg}")
-        
+        print(f"{encoder_name} error: {error_msg}")
+
+    return success, error_msg
+
+
+def reencode_video_optimal(
+    input_video_path: Path,
+    delete_on_exit: bool = True,
+    save_file: bool = False,
+    output_directory: Path | None = None,
+    repair_corrupted: bool = True,
+) -> Path:
+    """Re-encode an existing video file to AV1 using optimal NVIDIA GPU
+    accelerated settings.
+
+    Args:
+        input_video_path: Path to the input video file.
+        delete_on_exit: Whether to delete the temporary output file when the
+            program exits. Only applicable if save_file is False.
+        save_file: If True, saves the output video in the same directory as the
+            input or in output_directory if specified, with "_optimal.mp4" suffix.
+            If False, creates a temporary file.
+        output_directory: Directory to save the output file if save_file is True.
+            If None, input_video_path.parent is used.
+        repair_corrupted: Whether to attempt to repair corrupted videos by adding
+            error tolerance.
+
+    Returns:
+        Path to the re-encoded video file.
+    """
+    if not input_video_path.is_file():
+        raise FileNotFoundError(f"Input video file not found: {input_video_path}")
+
+    # Set up output path
+    output_path = _setup_output_path(
+        input_video_path, save_file, output_directory, delete_on_exit
+    )
+
+    # Build base command
+    cmd_base = _build_ffmpeg_base_command(input_video_path, repair_corrupted)
+
+    # Try AV1 NVENC first
+    cmd_av1 = cmd_base + _build_av1_encoder_command() + [str(output_path)]
+    success, error_msg = _execute_ffmpeg_command(cmd_av1, "optimal AV1")
+
+    if success:
         return output_path
+
+    print("AV1 NVENC failed, falling back to H.264...")
+
+    # Clean up temp file if error occurs and it was a temp file
+    if not save_file and output_path.exists():
+        output_path.unlink()
+
+    # Fallback to H.264
+    cmd_h264 = cmd_base + _build_h264_encoder_command() + [str(output_path)]
+    success, error_msg = _execute_ffmpeg_command(cmd_h264, "H.264")
+
+    if success:
+        return output_path
+
+    # If still failing, try with maximum error tolerance
+    if repair_corrupted:
+        print("Attempting with maximum error tolerance...")
+        cmd_max_tolerance = _build_max_tolerance_command(input_video_path, output_path)
+        success, error_msg = _execute_ffmpeg_command(cmd_max_tolerance, "max tolerance")
+
+        if success:
+            return output_path
+
+    # Clean up temp file if error occurs and it was a temp file
+    if not save_file and output_path.exists():
+        output_path.unlink()
+
+    raise RuntimeError(f"FFmpeg re-encoding failed: {error_msg}")
 
 
 def get_video_info(video_path: Path) -> dict:
@@ -320,41 +328,44 @@ def get_video_info(video_path: Path) -> dict:
     """
     cmd = [
         "ffprobe",
-        "-v", "quiet",
-        "-print_format", "json",
+        "-v",
+        "quiet",
+        "-print_format",
+        "json",
         "-show_format",
         "-show_streams",
-        str(video_path)
+        str(video_path),
     ]
 
     process = subprocess.run(cmd, capture_output=True, text=True)
-    
+
     if process.returncode != 0:
         raise RuntimeError(f"FFprobe failed: {process.stderr}")
 
     import json
+
     info = json.loads(process.stdout)
-    
+
     # Extract video stream info
     video_stream = None
     for stream in info.get("streams", []):
         if stream.get("codec_type") == "video":
             video_stream = stream
             break
-    
+
     if not video_stream:
         raise ValueError("No video stream found in the file")
-    
+
     # Extract relevant information
     result = {
         "width": int(video_stream.get("width", 0)),
         "height": int(video_stream.get("height", 0)),
-        "fps": eval(video_stream.get("r_frame_rate", "30/1")),  # Convert fraction to float
+        "fps": eval(video_stream.get("r_frame_rate", "30/1")),
         "duration": float(info.get("format", {}).get("duration", 0)),
         "frame_count": int(video_stream.get("nb_frames", 0)),
         "codec": video_stream.get("codec_name", "unknown"),
     }
-    
+
     return result
 
 
@@ -376,26 +387,28 @@ def extract_frames(
         List of paths to extracted frame images.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Build ffmpeg command
     cmd = [
         "ffmpeg",
-        "-i", str(video_path),
-        "-q:v", str(quality),
+        "-i",
+        str(video_path),
+        "-q:v",
+        str(quality),
     ]
-    
+
     if frame_rate is not None:
         cmd.extend(["-r", str(frame_rate)])
-    
+
     cmd.append(str(output_dir / "frame_%06d.jpg"))
-    
+
     # Execute FFmpeg
     process = subprocess.run(cmd, capture_output=True)
-    
+
     if process.returncode != 0:
         error_msg = process.stderr.decode()
         raise RuntimeError(f"Frame extraction failed: {error_msg}")
-    
+
     # Return list of extracted frame paths
     frame_paths = sorted(output_dir.glob("frame_*.jpg"))
     return frame_paths
@@ -412,15 +425,19 @@ def check_video_integrity(video_path: Path) -> dict:
     """
     cmd = [
         "ffprobe",
-        "-v", "error",
-        "-select_streams", "v:0",
-        "-show_entries", "stream=codec_name,width,height,r_frame_rate,nb_frames",
-        "-of", "json",
-        str(video_path)
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=codec_name,width,height,r_frame_rate,nb_frames",
+        "-of",
+        "json",
+        str(video_path),
     ]
 
     process = subprocess.run(cmd, capture_output=True, text=True)
-    
+
     result = {
         "is_valid": False,
         "error": None,
@@ -430,15 +447,16 @@ def check_video_integrity(video_path: Path) -> dict:
         "fps": None,
         "frame_count": None,
     }
-    
+
     if process.returncode != 0:
         result["error"] = process.stderr
         return result
-    
+
     try:
         import json
+
         info = json.loads(process.stdout)
-        
+
         if "streams" in info and len(info["streams"]) > 0:
             stream = info["streams"][0]
             result.update({
@@ -451,10 +469,10 @@ def check_video_integrity(video_path: Path) -> dict:
             })
         else:
             result["error"] = "No video streams found"
-            
+
     except Exception as e:
         result["error"] = f"Failed to parse video info: {str(e)}"
-    
+
     return result
 
 
@@ -475,49 +493,71 @@ def repair_corrupted_video(
         Path to the repaired video file.
     """
     if output_path is None:
-        with tempfile.NamedTemporaryFile(suffix="_repaired.mp4", delete=False) as temp_file:
+        with tempfile.NamedTemporaryFile(
+            suffix="_repaired.mp4", delete=False
+        ) as temp_file:
             output_path = Path(temp_file.name)
-    
+
     if method == "conservative":
         # Conservative approach: try to preserve as much as possible
         cmd = [
             "ffmpeg",
             "-y",
-            "-err_detect", "ignore_err",
-            "-fflags", "+genpts+igndts",
-            "-i", str(input_video_path),
-            "-c:v", "libx264",
-            "-preset", "medium",
-            "-crf", "23",
-            "-g", "30",
-            "-bf", "3",
-            "-pix_fmt", "yuv420p",
-            "-c:a", "copy",
-            str(output_path)
+            "-err_detect",
+            "ignore_err",
+            "-fflags",
+            "+genpts+igndts",
+            "-i",
+            str(input_video_path),
+            "-c:v",
+            "libx264",
+            "-preset",
+            "medium",
+            "-crf",
+            "23",
+            "-g",
+            "30",
+            "-bf",
+            "3",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "copy",
+            str(output_path),
         ]
     else:
         # Aggressive approach: prioritize successful repair
         cmd = [
             "ffmpeg",
             "-y",
-            "-err_detect", "ignore_err",
-            "-fflags", "+genpts+igndts+discardcorrupt",
-            "-i", str(input_video_path),
-            "-c:v", "libx264",
-            "-preset", "ultrafast",
-            "-crf", "28",
-            "-g", "1",
-            "-bf", "0",
-            "-pix_fmt", "yuv420p",
-            "-c:a", "copy",
-            str(output_path)
+            "-err_detect",
+            "ignore_err",
+            "-fflags",
+            "+genpts+igndts+discardcorrupt",
+            "-i",
+            str(input_video_path),
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-crf",
+            "28",
+            "-g",
+            "1",
+            "-bf",
+            "0",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "copy",
+            str(output_path),
         ]
-    
+
     process = subprocess.run(cmd, capture_output=True, text=True)
-    
+
     if process.returncode != 0:
         raise RuntimeError(f"Video repair failed: {process.stderr}")
-    
+
     return output_path
 
 
@@ -540,12 +580,12 @@ def hdf5_to_cv2_video(
     for i in range(len(frame_sizes_dset)):
         num_bytes = frame_sizes_dset[i]
         encoded_frame = image_bytes_dset[i, :num_bytes]
-        
+
         # Decode the image from memory
         image = Image.open(io.BytesIO(encoded_frame))
-        
+
         # Convert to numpy array and then to BGR for OpenCV
         frame_rgb = np.array(image)
         frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
-        
-        yield frame_bgr 
+
+        yield frame_bgr

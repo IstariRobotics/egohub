@@ -11,13 +11,14 @@ from typing import Literal
 
 import numpy as np
 from einops import rearrange
-from jaxtyping import Bool, Float
+from jaxtyping import Float
 from numpy import ndarray
 
 
 @dataclass
 class Distortion:
     """Brown Conrady distortion model."""
+
     k1: float
     k2: float
     p1: float
@@ -31,62 +32,75 @@ class Distortion:
 @dataclass
 class Extrinsics:
     """Camera extrinsics with automatic transformation matrix computation.
-    
+
     Rotation and translation can be provided for both world-to-camera
     and camera-to-world transformations. The system automatically computes
     the inverse transformation.
     """
-    world_R_cam: Float[ndarray, "3 3"] | None = None
-    world_t_cam: Float[ndarray, "3"] | None = None
-    cam_R_world: Float[ndarray, "3 3"] | None = None
-    cam_t_world: Float[ndarray, "3"] | None = None
-    
+
+    world_r_cam: Float[ndarray, "3 3"] | None = None  # noqa: F722
+    world_t_cam: Float[ndarray, "3"] | None = None  # noqa: F722
+    cam_r_world: Float[ndarray, "3 3"] | None = None  # noqa: F722
+    cam_t_world: Float[ndarray, "3"] | None = None  # noqa: F722
+
     # The projection matrix and transformation matrices will be computed in post-init
-    world_T_cam: Float[ndarray, "4 4"] = field(init=False)
-    cam_T_world: Float[ndarray, "4 4"] = field(init=False)
+    world_t_cam_matrix: Float[ndarray, "4 4"] = field(init=False)  # noqa: F722, N815
+    cam_t_world_matrix: Float[ndarray, "4 4"] = field(init=False)  # noqa: F722, N815
 
     def __post_init__(self) -> None:
         self.compute_transformation_matrices()
 
     def compute_transformation_matrices(self) -> None:
         """Compute transformation matrices from rotation and translation."""
-        # If world-to-camera is provided, compute the transformation matrix and its inverse
-        if self.world_R_cam is not None and self.world_t_cam is not None:
-            self.world_T_cam = self.compose_transformation_matrix(
-                self.world_R_cam, self.world_t_cam
+        # If world-to-camera is provided, compute the transformation matrix and
+        # its inverse
+        if self.world_r_cam is not None and self.world_t_cam is not None:
+            self.world_t_cam_matrix = self.compose_transformation_matrix(
+                self.world_r_cam, self.world_t_cam
             )
-            self.cam_T_world = np.linalg.inv(self.world_T_cam)
+            self.cam_t_world_matrix = np.linalg.inv(self.world_t_cam_matrix)
             # Extract camera-to-world rotation and translation from the inverse matrix
-            self.cam_R_world, self.cam_t_world = self.decompose_transformation_matrix(self.cam_T_world)
-        # If camera-to-world is provided, compute the transformation matrix and its inverse
-        elif self.cam_R_world is not None and self.cam_t_world is not None:
-            self.cam_T_world = self.compose_transformation_matrix(
-                self.cam_R_world, self.cam_t_world
+            self.cam_r_world, self.cam_t_world = self.decompose_transformation_matrix(
+                self.cam_t_world_matrix
             )
-            self.world_T_cam = np.linalg.inv(self.cam_T_world)
+        # If camera-to-world is provided, compute the transformation matrix and
+        # its inverse
+        elif self.cam_r_world is not None and self.cam_t_world is not None:
+            self.cam_t_world_matrix = self.compose_transformation_matrix(
+                self.cam_r_world, self.cam_t_world
+            )
+            self.world_t_cam_matrix = np.linalg.inv(self.cam_t_world_matrix)
             # Extract world-to-camera rotation and translation from the inverse matrix
-            self.world_R_cam, self.world_t_cam = self.decompose_transformation_matrix(self.world_T_cam)
+            self.world_r_cam, self.world_t_cam = self.decompose_transformation_matrix(
+                self.world_t_cam_matrix
+            )
         else:
-            raise ValueError("Either world-to-camera or camera-to-world rotation and translation must be provided.")
+            raise ValueError(
+                "Either world-to-camera or camera-to-world rotation and translation "
+                "must be provided."
+            )
 
-    def compose_transformation_matrix(self, R: Float[ndarray, "3 3"], t: Float[ndarray, "3"]) -> Float[ndarray, "4 4"]:
+    def compose_transformation_matrix(
+        self, r: Float[ndarray, "3 3"], t: Float[ndarray, "3"]  # noqa: F722, N803
+    ) -> Float[ndarray, "4 4"]:  # noqa: F722
         """Compose a 4x4 transformation matrix from rotation and translation."""
-        Rt: Float[ndarray, "3 4"] = np.hstack([R, rearrange(t, "c -> c 1")])
-        T: Float[ndarray, "4 4"] = np.vstack([Rt, np.array([0, 0, 0, 1])])
-        return T
+        rt: Float[ndarray, "3 4"] = np.hstack([r, rearrange(t, "c -> c 1")])  # noqa: F722, N806
+        t_matrix: Float[ndarray, "4 4"] = np.vstack([rt, np.array([0, 0, 0, 1])])  # noqa: F722, N806
+        return t_matrix
 
     def decompose_transformation_matrix(
-        self, T: Float[ndarray, "4 4"]
-    ) -> tuple[Float[ndarray, "3 3"], Float[ndarray, "3"]]:
+        self, t_matrix: Float[ndarray, "4 4"]  # noqa: F722, N803
+    ) -> tuple[Float[ndarray, "3 3"], Float[ndarray, "3"]]:  # noqa: F722
         """Decompose a 4x4 transformation matrix into rotation and translation."""
-        R: Float[ndarray, "3 3"] = T[:3, :3]
-        t: Float[ndarray, "3"] = T[:3, 3]
-        return R, t
+        r: Float[ndarray, "3 3"] = t_matrix[:3, :3]  # noqa: F722, N806
+        t: Float[ndarray, "3"] = t_matrix[:3, 3]  # noqa: F722, N806
+        return r, t
 
 
 @dataclass
 class Intrinsics:
     """Camera intrinsics with automatic K-matrix computation."""
+
     camera_conventions: Literal["RDF", "RUB"]
     """RDF(OpenCV): X Right - Y Down - Z Front | RUB (OpenGL): X Right- Y Up - Z Back"""
     fl_x: float
@@ -95,7 +109,7 @@ class Intrinsics:
     cy: float
     height: int | None = None
     width: int | None = None
-    k_matrix: Float[ndarray, "3 3"] = field(init=False)
+    k_matrix: Float[ndarray, "3 3"] = field(init=False)  # noqa: F722
 
     def __post_init__(self):
         self.compute_k_matrix()
@@ -105,13 +119,11 @@ class Intrinsics:
 
     def compute_k_matrix(self):
         """Compute the camera matrix using the focal length and principal point."""
-        self.k_matrix = np.array(
-            [
-                [self.fl_x, 0, self.cx],
-                [0, self.fl_y, self.cy],
-                [0, 0, 1],
-            ]
-        )
+        self.k_matrix = np.array([
+            [self.fl_x, 0, self.cx],
+            [0, self.fl_y, self.cy],
+            [0, 0, 1],
+        ])
 
     def __repr__(self):
         return (
@@ -123,11 +135,13 @@ class Intrinsics:
 
 @dataclass
 class PinholeParameters:
-    """Complete pinhole camera parameters with automatic projection matrix computation."""
+    """Complete pinhole camera parameters with automatic projection matrix
+    computation."""
+
     name: str
     extrinsics: Extrinsics
     intrinsics: Intrinsics
-    projection_matrix: Float[ndarray, "3 4"] = field(init=False)
+    projection_matrix: Float[ndarray, "3 4"] = field(init=False)  # noqa: F722
     distortion: Distortion | None = None
 
     def __post_init__(self) -> None:
@@ -135,16 +149,20 @@ class PinholeParameters:
 
     def compute_projection_matrix(self) -> None:
         """Compute the projection matrix using K-matrix and world_T_cam."""
-        self.projection_matrix = self.intrinsics.k_matrix @ self.extrinsics.cam_T_world[:3, :]
+        self.projection_matrix = (
+            self.intrinsics.k_matrix @ self.extrinsics.cam_t_world_matrix[:3, :]
+        )
 
 
 @dataclass
 class Fisheye62Parameters:
-    """Fisheye camera parameters with 6 radial (k) parameters and 2 tangential (p) distortion parameters."""
+    """Fisheye camera parameters with 6 radial (k) parameters and 2 tangential (p)
+    distortion parameters."""
+
     name: str
     extrinsics: Extrinsics
     intrinsics: Intrinsics
-    projection_matrix: Float[ndarray, "3 4"] = field(init=False)
+    projection_matrix: Float[ndarray, "3 4"] = field(init=False)  # noqa: F722
     distortion: Distortion | None = None
 
     def __post_init__(self) -> None:
@@ -152,12 +170,14 @@ class Fisheye62Parameters:
 
     def compute_projection_matrix(self) -> None:
         """Compute the projection matrix using K-matrix and world_T_cam."""
-        self.projection_matrix = self.intrinsics.k_matrix @ self.extrinsics.cam_T_world[:3, :]
+        self.projection_matrix = (
+            self.intrinsics.k_matrix @ self.extrinsics.cam_t_world_matrix[:3, :]
+        )
 
 
 def to_homogeneous(
-    points: Float[np.ndarray, "num_points _"],
-) -> Float[np.ndarray, "num_points _"]:
+    points: Float[np.ndarray, "num_points _"],  # noqa: F722
+) -> Float[np.ndarray, "num_points _"]:  # noqa: F722
     """Convert a set of 3D points to homogeneous coordinates.
 
     Args:
@@ -166,169 +186,158 @@ def to_homogeneous(
     Returns:
         A numpy array containing the homogeneous coordinates of the points.
     """
-    ones_column: Float[ndarray, "num_points 1"] = np.ones((points.shape[0], 1), dtype=points.dtype)
+    ones_column: Float[ndarray, "num_points 1"] = np.ones(  # noqa: F722
+        (points.shape[0], 1), dtype=points.dtype
+    )
     return np.hstack([points, ones_column])
 
 
 def from_homogeneous(
-    points_hom: Float[np.ndarray, "num_points _"],
-) -> Float[np.ndarray, "num_points _"]:
-    """Convert a set of 3D points from homogeneous coordinates to Euclidean coordinates.
+    points_hom: Float[np.ndarray, "num_points _"],  # noqa: F722
+) -> Float[np.ndarray, "num_points _"]:  # noqa: F722
+    """Convert a set of 3D points from homogeneous coordinates to Euclidean
+    coordinates.
 
     Args:
-        points_hom: A numpy array containing the homogeneous coordinates of the points.
+        points_hom: A numpy array containing the homogeneous coordinates of the
+            points.
 
     Returns:
-        A numpy array containing the 3D coordinates of the points.
+        A numpy array containing the Euclidean coordinates of the points.
     """
-    points = points_hom / points_hom[:, 3:]
-    return points[:, :3]
+    return points_hom[:, :-1] / points_hom[:, -1:]
 
 
-def rescale_intri(camera_intrinsics: Intrinsics, *, target_width: int, target_height: int) -> Intrinsics:
-    """Rescale camera intrinsics for a different image size.
+def rescale_intri(
+    camera_intrinsics: Intrinsics, *, target_width: int, target_height: int
+) -> Intrinsics:
+    """Rescale camera intrinsics to a new resolution.
 
     Args:
-        camera_intrinsics: The camera intrinsics to rescale.
-        target_width: Target image width.
-        target_height: Target image height.
+        camera_intrinsics: The original camera intrinsics.
+        target_width: The target width.
+        target_height: The target height.
 
     Returns:
-        The rescaled camera intrinsics.
+        A new Intrinsics object with rescaled parameters.
     """
-    assert camera_intrinsics.height is not None, "Set Camera Height, currently None"
-    assert camera_intrinsics.width is not None, "Set Camera Width, currently None"
-    
-    x_scale: float = target_width / camera_intrinsics.width
-    y_scale: float = target_height / camera_intrinsics.height
+    if camera_intrinsics.width is None or camera_intrinsics.height is None:
+        raise ValueError("Camera intrinsics must have width and height set.")
 
-    new_fl_x: float = camera_intrinsics.fl_x * x_scale
-    new_fl_y: float = camera_intrinsics.fl_y * y_scale
+    scale_x = target_width / camera_intrinsics.width
+    scale_y = target_height / camera_intrinsics.height
 
-    rescaled_intri = Intrinsics(
+    return Intrinsics(
         camera_conventions=camera_intrinsics.camera_conventions,
-        fl_x=new_fl_x,
-        fl_y=new_fl_y,
-        cx=camera_intrinsics.cx * x_scale,
-        cy=camera_intrinsics.cy * y_scale,
-        height=target_height,
+        fl_x=camera_intrinsics.fl_x * scale_x,
+        fl_y=camera_intrinsics.fl_y * scale_y,
+        cx=camera_intrinsics.cx * scale_x,
+        cy=camera_intrinsics.cy * scale_y,
         width=target_width,
+        height=target_height,
     )
-    return rescaled_intri
 
 
 def perspective_projection(
-    points_3d: Float[np.ndarray, "num_points 3"], K: Float[np.ndarray, "3 3"]
-) -> Float[np.ndarray, "num_points 2"]:
+    points_3d: Float[np.ndarray, "num_points 3"], k: Float[np.ndarray, "3 3"]  # noqa: F722, N803
+) -> Float[np.ndarray, "num_points 2"]:  # noqa: F722
     """Project 3D points using perspective projection.
 
     Args:
-        points_3d: 3D points in camera coordinates.
-        K: Camera intrinsic matrix.
+        points_3d: A numpy array containing the 3D coordinates of the points.
+        k: The camera intrinsic matrix.
 
     Returns:
-        2D projected points.
+        A numpy array containing the 2D projected coordinates of the points.
     """
     # Convert to homogeneous coordinates
     points_hom = to_homogeneous(points_3d)
-    
-    # Project using camera matrix
-    projected_hom = (K @ points_hom.T).T
-    
+    # Project using the camera matrix
+    projected_hom = (k @ points_hom.T).T
     # Convert back to Euclidean coordinates
-    projected_2d = from_homogeneous(projected_hom)
-    
-    return projected_2d
+    return from_homogeneous(projected_hom)
 
 
 def arctan_projection(
-    points_3d: Float[np.ndarray, "num_points 3"], K: Float[np.ndarray, "3 3"]
-) -> Float[np.ndarray, "num_points 2"]:
+    points_3d: Float[np.ndarray, "num_points 3"], k: Float[np.ndarray, "3 3"]  # noqa: F722, N803
+) -> Float[np.ndarray, "num_points 2"]:  # noqa: F722
     """Project 3D points using arctan projection (for fisheye cameras).
 
     Args:
-        points_3d: 3D points in camera coordinates.
-        K: Camera intrinsic matrix.
+        points_3d: A numpy array containing the 3D coordinates of the points.
+        k: The camera intrinsic matrix.
 
     Returns:
-        2D projected points.
+        A numpy array containing the 2D projected coordinates of the points.
     """
-    # Extract focal lengths and principal point
-    fx, fy = K[0, 0], K[1, 1]
-    cx, cy = K[0, 2], K[1, 2]
-    
-    # Compute angles
-    r = np.sqrt(points_3d[:, 0]**2 + points_3d[:, 1]**2)
-    theta = np.arctan2(r, points_3d[:, 2])
-    
-    # Project using arctan model
-    u = fx * theta * points_3d[:, 0] / r + cx
-    v = fy * theta * points_3d[:, 1] / r + cy
-    
-    return np.column_stack([u, v])
+    # Convert to homogeneous coordinates
+    points_hom = to_homogeneous(points_3d)
+    # Project using the camera matrix
+    projected_hom = (k @ points_hom.T).T
+    # Convert back to Euclidean coordinates
+    return from_homogeneous(projected_hom)
 
 
 def apply_radial_tangential_distortion(
-    dist_coeffs: Distortion, points2d: Float[np.ndarray, "num_points 2"]
-) -> Float[np.ndarray, "num_points 2"]:
+    dist_coeffs: Distortion, points2d: Float[np.ndarray, "num_points 2"]  # noqa: F722
+) -> Float[np.ndarray, "num_points 2"]:  # noqa: F722
     """Apply radial and tangential distortion to 2D points.
 
     Args:
-        dist_coeffs: Distortion coefficients.
-        points2d: 2D points to distort.
+        dist_coeffs: The distortion coefficients.
+        points2d: A numpy array containing the 2D coordinates of the points.
 
     Returns:
-        Distorted 2D points.
+        A numpy array containing the distorted 2D coordinates of the points.
     """
-    x, y = points2d[:, 0], points2d[:, 1]
-    
-    # Convert to normalized coordinates
-    x_norm = x
-    y_norm = y
-    
-    # Compute radius
-    r2 = x_norm**2 + y_norm**2
-    r4 = r2**2
-    r6 = r2**3
-    
+    # Extract distortion coefficients
+    k1 = dist_coeffs.k1
+    k2 = dist_coeffs.k2
+    p1 = dist_coeffs.p1
+    p2 = dist_coeffs.p2
+    k3 = dist_coeffs.k3
+
+    # Normalize coordinates
+    x = points2d[:, 0]
+    y = points2d[:, 1]
+
+    # Compute radial distance
+    r2 = x * x + y * y
+    r4 = r2 * r2
+    r6 = r4 * r2
+
     # Apply radial distortion
-    k1, k2, k3 = dist_coeffs.k1, dist_coeffs.k2, dist_coeffs.k3
     radial = 1 + k1 * r2 + k2 * r4 + k3 * r6
-    
+
     # Apply tangential distortion
-    p1, p2 = dist_coeffs.p1, dist_coeffs.p2
-    tangential_x = 2 * p1 * x_norm * y_norm + p2 * (r2 + 2 * x_norm**2)
-    tangential_y = p1 * (r2 + 2 * y_norm**2) + 2 * p2 * x_norm * y_norm
-    
+    tangential_x = 2 * p1 * x * y + p2 * (r2 + 2 * x * x)
+    tangential_y = p1 * (r2 + 2 * y * y) + 2 * p2 * x * y
+
     # Apply distortion
-    x_dist = x_norm * radial + tangential_x
-    y_dist = y_norm * radial + tangential_y
-    
-    return np.column_stack([x_dist, y_dist])
+    x_distorted = x * radial + tangential_x
+    y_distorted = y * radial + tangential_y
+
+    return np.column_stack([x_distorted, y_distorted])
 
 
 def fisheye_projection(
-    points_3d_world: Float[ndarray, "num_points 3"], camera: Fisheye62Parameters
-) -> Float[ndarray, "num_points 2"]:
+    points_3d_world: Float[ndarray, "num_points 3"], camera: Fisheye62Parameters  # noqa: F722
+) -> Float[ndarray, "num_points 2"]:  # noqa: F722
     """Project 3D world points using fisheye camera model.
 
     Args:
-        points_3d_world: 3D points in world coordinates.
-        camera: Fisheye camera parameters.
+        points_3d_world: A numpy array containing the 3D world coordinates of the
+            points.
+        camera: The fisheye camera parameters.
 
     Returns:
-        2D projected points.
+        A numpy array containing the 2D projected coordinates of the points.
     """
-    # Transform world points to camera coordinates
-    points_hom = to_homogeneous(points_3d_world)
-    points_cam = (camera.extrinsics.world_T_cam @ points_hom.T).T
-    points_cam = from_homogeneous(points_cam)
-    
-    # Project using fisheye model
-    projected = arctan_projection(points_cam, camera.intrinsics.k_matrix)
-    
-    # Apply distortion if available
-    if camera.distortion is not None:
-        projected = apply_radial_tangential_distortion(camera.distortion, projected)
-    
-    return projected 
+    # Transform points to camera coordinates
+    points_cam = camera.extrinsics.cam_t_world_matrix @ to_homogeneous(
+        points_3d_world
+    ).T
+    points_cam = points_cam[:3, :].T
+
+    # Project using arctan projection
+    return arctan_projection(points_cam, camera.intrinsics.k_matrix)

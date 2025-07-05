@@ -1,3 +1,3 @@
 from .pipeline import TransformPipeline
 
-__all__ = ["TransformPipeline"] 
+__all__ = ["TransformPipeline"]

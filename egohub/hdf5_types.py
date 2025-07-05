@@ -4,10 +4,11 @@ These are *structural* (``Protocol``-based) interfaces that describe only the
 parts of ``h5py.Group`` we rely on. They allow static-type checkers to validate
 string-key access without us needing a concrete subclass of ``h5py.Group``.
 """
+
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable, Iterator, Mapping
-import numpy as np
+from typing import Iterator, Protocol, runtime_checkable
+
 import h5py
 
 
@@ -43,4 +44,4 @@ class TrajectoryGroup(H5GroupLike, Protocol):
         ...
 
     cameras: h5py.Group  # type: ignore[assignment]
-    metadata: h5py.Group  # type: ignore[assignment] 
+    metadata: h5py.Group  # type: ignore[assignment]

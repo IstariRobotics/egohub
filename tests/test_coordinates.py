@@ -1,8 +1,7 @@
 import numpy as np
-from egohub.transforms.coordinates import (
-    arkit_to_canonical_transform,
-    transform_pose
-)
+
+from egohub.transforms.coordinates import arkit_to_canonical_transform, transform_pose
+
 
 def test_arkit_to_canonical_transform_properties():
     """
@@ -45,4 +44,4 @@ def test_pose_transformation_round_trip():
     round_trip_pose = transform_pose(canonical_pose, canonical_to_arkit)
 
     # The final pose should be identical to the original
-    assert np.allclose(original_pose, round_trip_pose, atol=1e-7) 
+    assert np.allclose(original_pose, round_trip_pose, atol=1e-7)

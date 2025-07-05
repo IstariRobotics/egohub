@@ -12,4 +12,4 @@ def test_canonical_skeleton_constants(data_regression):
         "hierarchy": constants.CANONICAL_SKELETON_HIERARCHY,
         "avp_links": constants.AVP_LINKS,
     }
-    data_regression.check(skeleton_data) 
+    data_regression.check(skeleton_data)

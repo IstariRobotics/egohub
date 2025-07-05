@@ -34,6 +34,7 @@ def get_safe_application_id() -> str:
 @dataclass
 class RerunTyroConfig:
     """Configuration for Rerun initialization with tyro integration."""
+
     application_id: str = field(default_factory=get_safe_application_id)
     """Name of the application"""
     recording_id: str | UUID | None = None
@@ -41,7 +42,8 @@ class RerunTyroConfig:
     connect: bool = False
     """Whether to connect to an existing rerun instance or not"""
     save: Path | None = None
-    """Path to save the rerun data, this will make it so no data is visualized but saved"""
+    """Path to save the rerun data, this will make it so no data is visualized
+    """
     serve: bool = False
     """Serve the rerun data"""
     headless: bool = False
@@ -103,14 +105,16 @@ def log_pinhole(
         f"{cam_log_path}",
         rr.Transform3D(
             translation=camera.extrinsics.cam_t_world,
-            mat3x3=camera.extrinsics.cam_R_world,
+            mat3x3=camera.extrinsics.cam_r_world,
             from_parent=True,
         ),
         static=static,
     )
 
 
-def log_video(video_path: Path, video_log_path: Path, timeline: str = "video_time") -> Int[ndarray, "num_frames"]:
+def log_video(
+    video_path: Path, video_log_path: Path, timeline: str = "video_time"
+) -> Int[ndarray, "num_frames"]:
     """Log video asset and frame timestamps.
 
     Args:
@@ -127,7 +131,9 @@ def log_video(video_path: Path, video_log_path: Path, timeline: str = "video_tim
         rr.log(str(video_log_path), video_asset, static=True)
 
         # Send automatically determined video frame timestamps.
-        frame_timestamps_ns: Int[ndarray, "num_frames"] = video_asset.read_frame_timestamps_ns()
+        frame_timestamps_ns: Int[ndarray, "num_frames"] = (
+            video_asset.read_frame_timestamps_ns()
+        )
         rr.send_columns(
             f"{video_log_path}",
             # Note timeline values don't have to be the same as the video timestamps.
@@ -138,20 +144,25 @@ def log_video(video_path: Path, video_log_path: Path, timeline: str = "video_tim
     except Exception as e:
         print(f"Warning: Could not load video with Rerun asset system: {e}")
         print("Falling back to manual frame timing...")
-        
+
         # Fallback: create timestamps manually
         import cv2
+
         cap = cv2.VideoCapture(str(video_path))
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         fps = cap.get(cv2.CAP_PROP_FPS)
         cap.release()
-        
+
         # Create timestamps based on frame count and FPS
         frame_timestamps_ns = np.arange(frame_count, dtype=np.int64) * int(1e9 / fps)
-        
+
         # Log video as a simple reference
-        rr.log(str(video_log_path), rr.TextDocument(text=f"Video: {video_path.name}"), static=True)
-        
+        rr.log(
+            str(video_log_path),
+            rr.TextDocument(text=f"Video: {video_path.name}"),
+            static=True,
+        )
+
         return frame_timestamps_ns
 
 
@@ -171,7 +182,8 @@ class ConfidenceBatch(rr.ComponentBatchMixin):
 
 
 class Points2DWithConfidence(rr.AsComponents):
-    """A custom archetype that extends Rerun's builtin `Points2D` archetype with confidence scores."""
+    """A custom archetype that extends Rerun's builtin `Points2D` archetype with
+    confidence scores."""
 
     def __init__(
         self: Any,
@@ -192,18 +204,21 @@ class Points2DWithConfidence(rr.AsComponents):
             radii=radii,
         )
         self.confidences = ConfidenceBatch(confidences).or_with_descriptor_overrides(
-            archetype_name="user.CustomPoints2D", archetype_field_name="confidences"
+            archetype_name="user.CustomPoints2D",
+            archetype_field_name="confidences"
         )
 
     def as_component_batches(self) -> list[rr.DescribedComponentBatch]:
-        return (
-            list(self.points2d.as_component_batches())  # The components from Points2D
-            + [self.confidences]  # Custom confidence data
-        )
+        return list(
+            self.points2d.as_component_batches()
+        ) + [  # The components from Points2D
+            self.confidences
+        ]  # Custom confidence data
 
 
 class Points3DWithConfidence(rr.ComponentColumn):
-    """A custom archetype that extends Rerun's builtin `Points3D` archetype with confidence scores."""
+    """A custom archetype that extends Rerun's builtin `Points3D` archetype with
+    confidence scores."""
 
     def __init__(
         self: Any,
@@ -224,14 +239,16 @@ class Points3DWithConfidence(rr.ComponentColumn):
             radii=radii,
         )
         self.confidences = ConfidenceBatch(confidences).or_with_descriptor_overrides(
-            archetype_name="user.CustomPoints3D", archetype_field_name="confidences"
+            archetype_name="user.CustomPoints3D",
+            archetype_field_name="confidences"
         )
 
     def as_component_batches(self) -> list[rr.DescribedComponentBatch]:
-        return (
-            list(self.points3d.as_component_batches())  # The components from Points3D
-            + [self.confidences]  # Custom confidence data
-        )
+        return list(
+            self.points3d.as_component_batches()
+        ) + [  # The components from Points3D
+            self.confidences
+        ]  # Custom confidence data
 
 
 def confidence_scores_to_rgb(
@@ -256,10 +273,16 @@ def confidence_scores_to_rgb(
         represented as an array of three integers [R, G, B].
     """
     n_frames, n_kpts, _ = confidence_scores.shape
-    clipped_confidences: Float[ndarray, "n_frames n_kpts 1"] = np.clip(confidence_scores, a_min=0.0, a_max=1.0)
-    clipped_confidences: Float[ndarray, "n_frames n_kpts"] = np.squeeze(clipped_confidences, axis=-1)
+    clipped_confidences: Float[ndarray, "n_frames n_kpts 1"] = np.clip(
+        confidence_scores, a_min=0.0, a_max=1.0
+    )
+    clipped_confidences: Float[ndarray, "n_frames n_kpts"] = np.squeeze(
+        clipped_confidences, axis=-1
+    )
 
-    colors: UInt8[ndarray, "n_frames n_kpts 3"] = np.zeros((n_frames, n_kpts, 3), dtype=np.uint8)
+    colors: UInt8[ndarray, "n_frames n_kpts 3"] = np.zeros(
+        (n_frames, n_kpts, 3), dtype=np.uint8
+    )
     # Segment A: red → yellow for conf ≤ 0.5
     mask_low = clipped_confidences <= 0.5
     if mask_low.any():
@@ -280,7 +303,7 @@ def confidence_scores_to_rgb(
 
 def create_optimal_blueprint() -> rr.blueprint.Blueprint:
     """Create an optimal blueprint layout for egocentric data visualization.
-    
+
     Returns:
         A Rerun blueprint with 3D spatial view, 2D video view, and text document view.
     """
@@ -295,4 +318,4 @@ def create_optimal_blueprint() -> rr.blueprint.Blueprint:
             column_shares=[2, 1],
         ),
         collapse_panels=True,
-    ) 
+    )

@@ -1,14 +1,14 @@
 """
 Base classes for dataset adapters.
 """
+
+import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
-import logging
-import yaml
-from egohub.schema import Trajectory
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
 
 import h5py
+import yaml
 from tqdm import tqdm
 
 
@@ -23,7 +23,9 @@ class BaseAdapter(ABC):
 
     name: str = ""
 
-    def __init__(self, raw_dir: Path, output_file: Path, config: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self, raw_dir: Path, output_file: Path, config: Optional[Dict[str, Any]] = None
+    ):
         self.raw_dir = raw_dir
         self.output_file = output_file
         self.config = config or self._load_config()
@@ -32,17 +34,22 @@ class BaseAdapter(ABC):
     def _load_config(self) -> dict:
         """Loads the adapter-specific YAML configuration file."""
         if not self.name:
-            logging.warning(f"Adapter '{self.__class__.__name__}' has no name. Skipping config load.")
+            logging.warning(
+                f"Adapter '{self.__class__.__name__}' has no name. "
+                "Skipping config load."
+            )
             return {}
 
         # Assuming the script is run from the project root
         config_path = Path(f"configs/{self.name}.yaml")
         if not config_path.exists():
-            logging.warning(f"No config file found for adapter '{self.name}' at {config_path}.")
+            logging.warning(
+                f"No config file found for adapter '{self.name}' at {config_path}."
+            )
             return {}
 
         logging.info(f"Loading configuration from {config_path}...")
-        with open(config_path, 'r') as f:
+        with open(config_path, "r") as f:
             try:
                 return yaml.safe_load(f)
             except yaml.YAMLError as e:
@@ -84,7 +91,8 @@ class BaseAdapter(ABC):
         and writing logic resides.
 
         Args:
-            seq_info (dict): A dictionary from the list returned by discover_sequences().
+            seq_info (dict): A dictionary from the list returned by
+                discover_sequences().
             traj_group (h5py.Group): The HDF5 group to write the processed data into.
         """
         pass
@@ -107,7 +115,9 @@ class BaseAdapter(ABC):
 
         sequences = self.discover_sequences()
         if num_sequences is not None:
-            logging.info(f"Limiting processing to the first {num_sequences} sequence(s).")
+            logging.info(
+                f"Limiting processing to the first {num_sequences} sequence(s)."
+            )
             sequences = sequences[:num_sequences]
 
         if not sequences:
@@ -116,9 +126,9 @@ class BaseAdapter(ABC):
 
         logging.info("Creating HDF5 file and processing sequences...")
         self.output_file.parent.mkdir(parents=True, exist_ok=True)
-        with h5py.File(self.output_file, 'w') as f_out:
+        with h5py.File(self.output_file, "w") as f_out:
             for i, seq_info in enumerate(tqdm(sequences, desc="Processing Sequences")):
                 traj_group = f_out.create_group(f"trajectory_{i:04d}")
                 self.process_sequence(seq_info, traj_group)
 
-        logging.info("Conversion process completed successfully.") 
+        logging.info("Conversion process completed successfully.")

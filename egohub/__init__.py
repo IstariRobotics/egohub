@@ -1,1 +1,1 @@
-# This file makes 'egohub' a Python package. 
+# This file makes 'egohub' a Python package.
