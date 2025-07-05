@@ -33,6 +33,10 @@ dev = [
     "pytest-cov",
     "pytest-xdist",
     "pytest-regressions",
+    "ruff",
+    "hypothesis",
+    "codecov",
+    "typer[all]",
     "black>=23.0.0",
     "isort>=5.12.0",
     "mypy>=1.0.0",
@@ -69,4 +73,23 @@ strict = true
 # Don't fail on third-party libraries that lack type hints
 ignore_missing_imports = true
 # Exclude folders that are not part of our source tree
-exclude = ["next/"] 
+exclude = ["next/"]
+
+[tool.ruff]
+# Match black line-length for consistency
+line-length = 88
+# Enable a broad set of useful rules:
+# E, F: pycodestyle & pyflakes (core)
+# W: pycodestyle warnings
+# I: isort (import sorting)
+# C90: McCabe complexity
+# N: pep8-naming
+select = ["E", "F", "W", "I", "C90", "N"]
+
+[tool.ruff.lint.isort]
+# Tell isort that `egohub` is a first-party import
+known-first-party = ["egohub"]
+
+[tool.ruff.format]
+# Opt-in to the formatter, which is currently in preview.
+preview = true 
