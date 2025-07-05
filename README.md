@@ -119,7 +119,29 @@ cd egohub
 # Set up environment and install dependencies
 uv venv
 source .venv/bin/activate
-uv pip install -e .[hf] # Install with Hugging Face extras for tools
+uv pip install -e ".[dev,full]" # Install with all extras
+
+# Set up pre-commit hooks for automated quality checks
+pre-commit install
+```
+
+### Developer Workflow
+
+This project uses a suite of tools to ensure code quality and consistency.
+
+1.  **Formatting & Linting**: We use `ruff` for linting and `black` for formatting, run automatically via `pre-commit`.
+2.  **Type Checking**: `mypy` is used for static type analysis.
+
+You can run all checks manually at any time:
+```bash
+# Run all linters and type checkers
+make lint
+```
+
+To run the core unit tests:
+```bash
+# Run fast, deterministic unit tests
+make test
 ```
 
 ### Usage Workflows

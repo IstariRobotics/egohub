@@ -1,0 +1,18 @@
+[lint]
+# Match black line-length for consistency
+line-length = 88
+# Enable a broad set of useful rules:
+# E, F: pycodestyle & pyflakes (core)
+# W: pycodestyle warnings
+# I: isort (import sorting)
+# C90: McCabe complexity
+# N: pep8-naming
+select = ["E", "F", "W", "I", "C90", "N"]
+
+[lint.isort]
+# Tell isort that `egohub` is a first-party import
+known-first-party = ["egohub"]
+
+[format]
+# Opt-in to the formatter, which is currently in preview.
+preview = true 
