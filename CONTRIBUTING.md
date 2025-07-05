@@ -40,7 +40,10 @@ Create a new Python file in the `egohub/adapters/` directory.
 
 ### Step 3: Implement the Adapter Class
 
-Inside your new file, create a class that inherits from `egohub.adapters.base.BaseAdapter`. The `name` attribute **must** match the name of your configuration file (without the `.yaml` extension). You will also need to implement the `discover_sequences` and `process_sequence` methods.
+Inside your new file, create a class that inherits from `egohub.adapters.base.BaseAdapter`. You must implement the following:
+1.  A `name` class attribute that **must** match the name of your configuration file (without the `.yaml` extension). The command-line interface uses this name to find your adapter.
+2.  The `discover_sequences` and `process_sequence` methods.
+3.  The `source_joint_names` and `source_skeleton_hierarchy` properties.
 
 ```python
 # egohub/adapters/awesome_ego.py
@@ -51,11 +54,26 @@ import h5py
 import numpy as np
 
 from egohub.adapters.base import BaseAdapter
-from egohub.schema import create_trajectory_group_from_template # Example helper
 
 class AwesomeEgoAdapter(BaseAdapter):
     """Adapter for the AwesomeEgo dataset."""
     name = "awesome_ego" # This MUST match the config file name
+
+    @property
+    def source_joint_names(self) -> list[str]:
+        """
+        Returns the list of joint names from the source dataset.
+        If the dataset has no skeleton data, return an empty list.
+        """
+        return []
+
+    @property
+    def source_skeleton_hierarchy(self) -> dict[str, str]:
+        """
+        Returns the kinematic hierarchy for the source skeleton.
+        If the dataset has no skeleton data, return an empty dict.
+        """
+        return {}
 
     def discover_sequences(self) -> list[dict]:
         """
@@ -81,7 +99,7 @@ class AwesomeEgoAdapter(BaseAdapter):
         
         This is where you'll read the raw data, perform any necessary transformations,
         and write to the canonical HDF5 structure. You can access your config
-        via `self.config`.
+        via `self.config`. The schema is defined via dataclasses in `egohub/schema.py`.
         """
         video_path = seq_info["video_path"]
         logging.info(f"Processing sequence from {video_path}...")
@@ -90,21 +108,20 @@ class AwesomeEgoAdapter(BaseAdapter):
         frame_rate = self.config.get("frame_rate", 30.0)
         logging.info(f"Using frame rate: {frame_rate}")
         
-        # Example: Write placeholder data
-        num_frames = 100 # Replace with actual frame count
+        # Example: Create a group for some data
+        metadata_group = traj_group.create_group("metadata")
+        metadata_group.attrs["source_dataset"] = self.name
         
         # ... (rest of your processing logic)
 ```
 
-### Step 4: Handling Skeleton Data (If Applicable)
+### Step 4: Handling Skeleton Data
 
-If your dataset includes full-body skeleton data, you **must** remap it to the library's canonical skeleton format. This is enforced by the `BaseAdapter`, which requires you to implement two properties.
+If your dataset includes full-body skeleton data, you must remap it to the library's canonical skeleton format. This involves two parts.
 
-1.  **Define the Source Skeleton**: In your adapter class, implement `source_joint_names` and `source_skeleton_hierarchy` to describe the skeleton provided by your dataset. You can define these lists and dictionaries directly in your adapter file or, for complex skeletons, in `egohub/constants.py`.
+1.  **Define the Source Skeleton**: In your adapter class, implement `source_joint_names` and `source_skeleton_hierarchy` to describe the skeleton provided by your dataset. These properties are **required** for all adapters, so if your dataset does not include skeletons, simply return an empty list and dictionary, respectively.
 
     ```python
-    from egohub.constants import CANONICAL_SKELETON_JOINTS # For reference
-    
     # In your AwesomeEgoAdapter class:
     @property
     def source_joint_names(self) -> list[str]:
@@ -125,44 +142,26 @@ If your dataset includes full-body skeleton data, you **must** remap it to the l
     # In your process_sequence method:
     # ...
     source_skeleton_positions = ... # Load your (N, num_source_joints, 3) data
+    source_skeleton_confidences = ... # Load your (N, num_source_joints) data
     
-    canonical_positions = remap_skeleton(
+    canonical_positions, canonical_confidences = remap_skeleton(
         source_positions=source_skeleton_positions,
+        source_confidences=source_skeleton_confidences,
         source_joint_names=self.source_joint_names
     )
     
-    # Now, save `canonical_positions` to the HDF5 file.
+    # Now, save the remapped data to the HDF5 file.
+    skeleton_group = traj_group.create_group("skeleton")
     skeleton_group.create_dataset("positions", data=canonical_positions)
+    skeleton_group.create_dataset("confidences", data=canonical_confidences)
     # ...
     ```
 
-### Step 5: Register the Adapter in the CLI
+### Step 5: Test Your Adapter
 
-Finally, make your new adapter accessible through the `egohub` command-line interface.
+Your adapter is now ready to be used. The `egohub` command-line tool will automatically discover any `BaseAdapter` subclasses in the `egohub/adapters/` directory, so no manual registration is needed.
 
-Open `egohub/cli/main.py` and add your new adapter class to the `ADAPTER_MAP` dictionary.
-
-```python
-# egohub/cli/main.py
-
-# ... other imports
-from egohub.adapters.egodex import EgoDexAdapter
-from egohub.adapters.awesome_ego import AwesomeEgoAdapter # 1. Import your new adapter
-
-# ...
-
-# 2. Add your adapter to the map
-ADAPTER_MAP = {
-    "egodex": EgoDexAdapter,
-    "awesome-ego": AwesomeEgoAdapter, # The key is the name used on the command line
-}
-
-# ... rest of the file
-```
-
-### Step 6: Test Your Adapter
-
-You can now run your adapter from the command line:
+You can run your adapter from the command line, using the `name` you defined in the adapter class as the identifier:
 
 ```bash
 egohub convert awesome-ego \
