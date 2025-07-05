@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "egohub"
 version = "0.1.0"
 description = "A toolkit for egocentric data processing, conversion, and visualization."
-authors = [{ name = "James Ball", email = "james@istarirobotics.com }]
+authors = [{ name = "James Ball", email = "james@istarirobotics.com" }]
 license = { text = "MIT Custom" }
 readme = "README.md"
 requires-python = ">=3.9"
@@ -58,4 +58,10 @@ line_length = 88
 python_version = "3.9"
 warn_return_any = true
 warn_unused_configs = true
-disallow_untyped_defs = true 
+disallow_untyped_defs = true
+# Enable most strict checks for better type safety
+strict = true
+# Don't fail on third-party libraries that lack type hints
+ignore_missing_imports = true
+# Exclude folders that are not part of our source tree
+exclude = ["next/"] 
