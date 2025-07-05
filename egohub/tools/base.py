@@ -1,7 +1,9 @@
 """Base class for data processing tools."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+
 import h5py
 
 
@@ -20,4 +22,4 @@ class BaseTool(ABC):
             traj_group: The HDF5 group for a single trajectory.
                         (e.g., f['trajectory_0000'])
         """
-        raise NotImplementedError 
+        raise NotImplementedError

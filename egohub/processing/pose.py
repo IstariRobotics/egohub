@@ -1,13 +1,16 @@
-from egohub.transforms.pipeline import TransformPipeline
-from egohub.transforms.coordinates import arkit_to_canonical_poses
 import numpy as np
+
+from egohub.transforms.coordinates import arkit_to_canonical_poses
+from egohub.transforms.pipeline import TransformPipeline
+
 
 class PoseTransformer:
     """
     A component for transforming pose data into the canonical coordinate frame.
     """
+
     def __init__(self, source_format: str):
-        if source_format == 'arkit':
+        if source_format == "arkit":
             self.pipeline = TransformPipeline([arkit_to_canonical_poses])
         else:
             # In the future, we could add other pipelines for other formats
@@ -23,4 +26,4 @@ class PoseTransformer:
         Returns:
             np.ndarray: The poses in the canonical coordinate system.
         """
-        return self.pipeline(raw_poses) 
+        return self.pipeline(raw_poses)

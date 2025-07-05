@@ -1,9 +1,9 @@
 import numpy as np
 from scipy.spatial import cKDTree
 
+
 def generate_indices(
-    master_timestamps_ns: np.ndarray, 
-    stream_timestamps_ns: np.ndarray
+    master_timestamps_ns: np.ndarray, stream_timestamps_ns: np.ndarray
 ) -> np.ndarray:
     """
     Generates indices that map a data stream to a master timestamp array.
@@ -34,4 +34,4 @@ def generate_indices(
     # Query the tree to find the index of the nearest neighbor for each stream timestamp
     _, indices = tree.query(stream_reshaped, k=1)
 
-    return indices.astype(np.uint64) 
+    return indices.astype(np.uint64)

@@ -1,8 +1,9 @@
-import pytest
-import h5py
-import numpy as np
 import uuid
 from pathlib import Path
+
+import h5py
+import numpy as np
+import pytest
 
 from egohub.constants import CANONICAL_SKELETON_JOINTS
 
@@ -22,6 +23,7 @@ def hdf5_file_factory(tmpdir_factory):
             hdf5_path = hdf5_file_factory(num_trajectories=1, num_frames=10)
             # ... use the file ...
     """
+
     def _create_file(
         num_trajectories: int = 1,
         num_frames: int = 5,
@@ -45,44 +47,72 @@ def hdf5_file_factory(tmpdir_factory):
                 meta_group.attrs["source_identifier"] = f"synthetic_traj_{i}"
                 meta_group.attrs["action_label"] = "testing"
                 meta_group.create_dataset(
-                    "timestamps_ns", data=np.arange(num_frames, dtype=np.uint64) * 1_000_000
+                    "timestamps_ns",
+                    data=np.arange(num_frames, dtype=np.uint64) * 1_000_000,
                 )
 
                 # --- Cameras ---
                 cameras_group = traj_group.create_group("cameras")
                 cam1_group = cameras_group.create_group("camera_0")
                 cam1_group.attrs["is_ego"] = True
-                cam1_group.create_dataset("intrinsics", data=np.eye(3, dtype=np.float32))
-                
+                cam1_group.create_dataset(
+                    "intrinsics", data=np.eye(3, dtype=np.float32)
+                )
+
                 # Create sample poses (identity matrices)
-                identity_poses = np.tile(np.eye(4, dtype=np.float32), (num_frames, 1, 1))
+                identity_poses = np.tile(
+                    np.eye(4, dtype=np.float32), (num_frames, 1, 1)
+                )
                 cam1_group.create_dataset("pose_in_world", data=identity_poses)
-                cam1_group.create_dataset("pose_indices", data=np.arange(num_frames, dtype=np.uint64))
+                cam1_group.create_dataset(
+                    "pose_indices", data=np.arange(num_frames, dtype=np.uint64)
+                )
 
                 if add_video:
                     rgb_group = cam1_group.create_group("rgb")
                     # Store dummy byte data for images
-                    dummy_frame_data = [f"frame_{j}".encode('utf-8') for j in range(num_frames)]
-                    rgb_group.create_dataset("image_bytes", data=dummy_frame_data, dtype=h5py.special_dtype(vlen=bytes))
-                    rgb_group.create_dataset("frame_sizes", data=np.array([len(d) for d in dummy_frame_data], dtype=np.int32))
-                    rgb_group.create_dataset("frame_indices", data=np.arange(num_frames, dtype=np.uint64))
+                    dummy_frame_data = [
+                        f"frame_{j}".encode("utf-8") for j in range(num_frames)
+                    ]
+                    rgb_group.create_dataset(
+                        "image_bytes",
+                        data=dummy_frame_data,
+                        dtype=h5py.special_dtype(vlen=bytes),
+                    )
+                    rgb_group.create_dataset(
+                        "frame_sizes",
+                        data=np.array(
+                            [len(d) for d in dummy_frame_data], dtype=np.int32
+                        ),
+                    )
+                    rgb_group.create_dataset(
+                        "frame_indices", data=np.arange(num_frames, dtype=np.uint64)
+                    )
 
                 # --- Hands ---
                 hands_group = traj_group.create_group("hands")
                 left_hand_group = hands_group.create_group("left_hand")
                 left_hand_group.create_dataset("pose_in_world", data=identity_poses)
-                left_hand_group.create_dataset("pose_indices", data=np.arange(num_frames, dtype=np.uint64))
+                left_hand_group.create_dataset(
+                    "pose_indices", data=np.arange(num_frames, dtype=np.uint64)
+                )
 
                 # --- Skeleton ---
                 if add_skeleton:
                     skeleton_group = traj_group.create_group("skeleton")
                     skeleton_group.create_dataset(
-                        "positions", data=np.random.rand(num_frames, num_joints, 3).astype(np.float32)
+                        "positions",
+                        data=np.random.rand(num_frames, num_joints, 3).astype(
+                            np.float32
+                        ),
                     )
                     skeleton_group.create_dataset(
-                        "confidences", data=np.random.rand(num_frames, num_joints).astype(np.float32)
+                        "confidences",
+                        data=np.random.rand(num_frames, num_joints).astype(np.float32),
                     )
-                    skeleton_group.create_dataset("frame_indices", data=np.arange(num_frames, dtype=np.uint64))
+                    skeleton_group.create_dataset(
+                        "frame_indices", data=np.arange(num_frames, dtype=np.uint64)
+                    )
 
         return file_path
 

@@ -1,12 +1,17 @@
+from typing import Optional
+
 import h5py
 import numpy as np
-from typing import Optional
+
 
 class HandProcessor:
     """
     A component for processing hand data from a source HDF5 file.
     """
-    def get_hand_poses(self, source_group: h5py.Group, hand: str) -> Optional[np.ndarray]:
+
+    def get_hand_poses(
+        self, source_group: h5py.Group, hand: str
+    ) -> Optional[np.ndarray]:
         """
         Extracts raw hand poses for a specific hand.
 
@@ -21,4 +26,4 @@ class HandProcessor:
         hand_transforms = source_group.get(source_key)
         if isinstance(hand_transforms, h5py.Dataset):
             return hand_transforms[:]
-        return None 
+        return None
