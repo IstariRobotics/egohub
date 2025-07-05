@@ -129,7 +129,7 @@ Apply a processing `Tool` to the canonical HDF5 file to add new data. The exampl
 ```bash
 python -m egohub.cli.process_data \
     --input-file data/processed/egodex.h5 \
-    --tool HuggingFaceObjectDetectionTool
+    --tools HuggingFaceObjectDetectionTool
 ```
 
 #### 3. Visualization Workflow
@@ -177,13 +177,11 @@ Next, run an enrichment tool to add more data to the file. We'll use the `Huggin
 ```bash
 python egohub/cli/process_data.py \
     --input-file data/processed/EgoDex_add_remove_lid.hdf5 \
-    --tools HuggingFaceObjectDetectionTool \
-    --num-trajectories 1
+    --tools HuggingFaceObjectDetectionTool
 ```
+**4. Visualize the Enriched Data**
 
-**4. Visualize the Result**
-
-Finally, use the `egohub visualize` command to view the processed data in the Rerun viewer. This will show the camera, the fully articulated skeleton (including hands and fingers), and the bounding boxes from the object detection tool.
+Finally, visualize the file again to see the newly added object bounding boxes.
 
 ```bash
 egohub visualize data/processed/EgoDex_add_remove_lid.hdf5
