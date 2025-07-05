@@ -31,10 +31,10 @@ subgraph "Egocentric Data Processing Pipeline"
 
     subgraph "Stage 3: Enrich"
         direction TB
-        ToolDetection["Object Detection Tool"]
+        ToolDetection["HuggingFace Model Tools"]
         ToolDepth["Depth Estimation Tool<br/>(Future Work)"]
     
-        CanonicalH5 -->|Reads video| ToolDetection
+        CanonicalH5 -->|Reads data| ToolDetection
         ToolDetection -->|Writes object data| CanonicalH5
         CanonicalH5 -.-> ToolDepth
     end
