@@ -111,11 +111,12 @@ egohub/
 │   │   └── base.py           # Base class that all adapters inherit from.
 │   ├── cli/                  # Argparse-based CLI applications.
 │   │   ├── main.py           # Main entry point for commands like 'convert'.
-│   │   └── process_data.py   # Script to run enrichment Tools on HDF5 files.
+│   │   └── main.py           # Main CLI interface with convert, visualize, process, and validate commands.
 │   ├── processing/           # Granular, reusable data processing components.
 │   │   ├── hand.py           # Logic for hand pose processing.
 │   │   └── video.py          # Logic for video decoding.
-│   ├── tools/                # Self-contained data enrichment tools.
+│   ├── tasks/                # Data processing tasks (pose estimation, object detection).
+│   ├── backends/             # Model backends for inference.
 │   │   ├── base.py           # Base class for all tools.
 │   │   └── hf_tools.py       # Tool(s) using the Hugging Face library.
 │   ├── models/               # VAE and Policy models for training.
@@ -191,8 +192,7 @@ egohub convert egodex \
 Apply a processing `Task` to the canonical HDF5 file to add new data. The example below uses the `ObjectDetectionTask` with the `HuggingFaceBackend` to find objects in the video stream and add them to the file.
 
 ```bash
-python -m egohub.cli.process_data \
-    --input-file data/processed/egodex.h5 \
+egohub process data/processed/egodex.h5 \
     --task ObjectDetectionTask \
     --backend HuggingFaceBackend \
     --backend-args "model_name=facebook/detr-resnet-50"
@@ -244,8 +244,7 @@ This creates a new file at `data/processed/EgoDex_add_remove_lid.hdf5`.
 Next, run an enrichment tool to add more data to the file. We'll use the `ObjectDetectionTask` with the `HuggingFaceBackend` to find objects in the video frames. Since this is a test, we will only process the first trajectory in the file.
 
 ```bash
-python egohub/cli/process_data.py \
-    --input-file data/processed/EgoDex_add_remove_lid.hdf5 \
+egohub process data/processed/EgoDex_add_remove_lid.hdf5 \
     --task ObjectDetectionTask \
     --backend HuggingFaceBackend
 ```
@@ -253,10 +252,9 @@ python egohub/cli/process_data.py \
 Note you can define the model you would like you would like to use with the `--backend-args` argument:
 
 ```bash
-python egohub/cli/process_data.py \\
-    --input-file data/processed/EgoDex_add_remove_lid.hdf5 \\
-    --task ObjectDetectionTask \\
-    --backend HuggingFaceBackend \\
+egohub process data/processed/EgoDex_add_remove_lid.hdf5 \
+    --task ObjectDetectionTask \
+    --backend HuggingFaceBackend \
     --backend-args "model_name=SenseTime/deformable-detr-with-box-refine"
 ```
 
@@ -306,11 +304,10 @@ Here are some examples of how to combine tasks and backends.
 The `mmpose` library will automatically download the model on first use.
 
 ```bash
-python egohub/cli/process_data.py \\
-    --input-file path/to/your.h5 \\
+egohub process path/to/your.h5 \\
     --task PoseEstimationTask \\
     --backend HuggingFaceBackend \\
-    --backend-args "model_name=sapiens-pose-1b" "task_name=pose-estimation"
+    --backend-args "model_name=sapiens-pose-1b,task_name=pose-estimation"
 ```
 
 ## Canonical Data Schema
