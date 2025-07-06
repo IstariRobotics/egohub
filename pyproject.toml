@@ -59,7 +59,7 @@ full = [
 "Homepage" = "https://github.com/istarirobotics/egohub"
 
 [project.scripts]
-egohub = "egohub.cli.main:app"
+egohub = "egohub.cli.main:main"
 
 [tool.setuptools.packages.find]
 include = ["egohub*"]
