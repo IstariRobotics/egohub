@@ -188,12 +188,14 @@ egohub convert egodex \
 
 #### 2. Enrichment Workflow
 
-Apply a processing `Tool` to the canonical HDF5 file to add new data. The example below uses the Hugging Face object detection tool to find objects in the video stream and add them to the file.
+Apply a processing `Task` to the canonical HDF5 file to add new data. The example below uses the `ObjectDetectionTask` with the `HuggingFaceBackend` to find objects in the video stream and add them to the file.
 
 ```bash
 python -m egohub.cli.process_data \
     --input-file data/processed/egodex.h5 \
-    --tools HuggingFaceObjectDetectionTool
+    --task ObjectDetectionTask \
+    --backend HuggingFaceBackend \
+    --backend-args "model_name=facebook/detr-resnet-50"
 ```
 
 #### 3. Visualization Workflow
@@ -239,18 +241,23 @@ This creates a new file at `data/processed/EgoDex_add_remove_lid.hdf5`.
 
 **3. Enrich with Object Detections**
 
-Next, run an enrichment tool to add more data to the file. We'll use the `HuggingFaceObjectDetectionTool` to find objects in the video frames. Since this is a test, we will only process the first trajectory in the file.
+Next, run an enrichment tool to add more data to the file. We'll use the `ObjectDetectionTask` with the `HuggingFaceBackend` to find objects in the video frames. Since this is a test, we will only process the first trajectory in the file.
 
 ```bash
 python egohub/cli/process_data.py \
     --input-file data/processed/EgoDex_add_remove_lid.hdf5 \
-    --tools HuggingFaceObjectDetectionTool
+    --task ObjectDetectionTask \
+    --backend HuggingFaceBackend
 ```
 
-Note you can define the model you would like you would like to use with the `--tool-args` argument
+Note you can define the model you would like you would like to use with the `--backend-args` argument:
 
 ```bash
-    --tool-args "HuggingFaceObjectDetectionTool:model_name=SenseTime/deformable-detr-with-box-refine"
+python egohub/cli/process_data.py \\
+    --input-file data/processed/EgoDex_add_remove_lid.hdf5 \\
+    --task ObjectDetectionTask \\
+    --backend HuggingFaceBackend \\
+    --backend-args "model_name=SenseTime/deformable-detr-with-box-refine"
 ```
 
 **4. Visualize the Enriched Data**
@@ -272,14 +279,39 @@ This table lists the datasets currently supported by `egohub` for ingestion. We 
 
 Instructions on downoading datasets can be found in `README_DATASETS.md`.
 
-## Supported Tools
+## Supported Tasks and Backends
 
-This table lists the enrichment tools available for post-processing canonical HDF5 files.
+The new modular architecture separates **Tasks** (what to do) from **Backends** (how to do it). You can combine any compatible task and backend.
+
+### Supported Tasks
+
+| Task Name               | Task Class              | Default Output Group | Description                                         |
+| :---------------------- | :---------------------- | :------------------- | :-------------------------------------------------- |
+| **Object Detection**    | `ObjectDetectionTask`   | `objects/`           | Detects objects and writes bounding boxes and scores. |
+| **Pose Estimation**     | `PoseEstimationTask`    | `skeleton/`          | Estimates poses and writes keypoints and confidences. |
+
+### Supported Backends
+
+| Backend Name              | Backend Class           | Dependencies                  | Compatible Tasks        | Notes                                                              |
+| :------------------------ | :---------------------- | :---------------------------- | :---------------------- | :----------------------------------------------------------------- |
+| **Hugging Face**          | `HuggingFaceBackend`    | `transformers`, `mmpose`      | `ObjectDetectionTask`, `PoseEstimationTask` | Can run various object detection and pose models from the HF Hub.    |
 
 
-| Tool Name                        | Tool Class                       | Dependencies            | Description                                                                                           |
-| :--------------------------------- | :--------------------------------- | :------------------------ | :------------------------------------------------------------------------------------------------------ |
-| **Hugging Face Object Detector** | `HuggingFaceObjectDetectionTool` | `torch`, `transformers` | Reads RGB frames, runs inference with any HF object detection model (default: DETR), and writes bounding boxes to the`objects/` group. |
+### Usage Examples
+
+Here are some examples of how to combine tasks and backends.
+
+**1. Run full-body pose estimation using Sapiens**
+
+The `mmpose` library will automatically download the model on first use.
+
+```bash
+python egohub/cli/process_data.py \\
+    --input-file path/to/your.h5 \\
+    --task PoseEstimationTask \\
+    --backend HuggingFaceBackend \\
+    --backend-args "model_name=sapiens-pose-1b" "task_name=pose-estimation"
+```
 
 ## Canonical Data Schema
 

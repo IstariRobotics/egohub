@@ -12,7 +12,75 @@ from tqdm import tqdm
 from transformers import pipeline
 
 from egohub.tools.base import BaseTool
-from egohub.video_utils import hdf5_to_cv2_video
+from egohub.video_utils import get_video_frames_from_hdf5, hdf5_to_cv2_video
+
+logger = logging.getLogger(__name__)
+
+
+class SapiensPoseTool(BaseTool):
+    def __init__(self, model_name: str = "sapiens-pose-1b"):
+        from mmpose.apis import MMPoseInferencer
+
+        self.model_name = model_name
+        self.inferencer = MMPoseInferencer(model_name)
+
+    def __call__(self, traj_group: h5py.Group) -> h5py.Group:
+        """
+        Processes a trajectory group to add full-body pose data.
+
+        Args:
+            traj_group (h5py.Group): The trajectory group to process.
+
+        Returns:
+            The processed trajectory group with skeleton data.
+        """
+        logger.info(f"Running Sapiens Pose Estimation on {traj_group.name}")
+        video_frames, timestamps_ns = get_video_frames_from_hdf5(
+            traj_group, "ego_camera"
+        )
+
+        if not video_frames:
+            logger.warning("No video frames found, skipping pose estimation.")
+            return traj_group
+
+        all_keypoints = []
+        all_confidences = []
+        frame_indices = []
+
+        for i, frame_np in enumerate(tqdm(video_frames, desc="Processing frames")):
+            result_generator = self.inferencer(frame_np, show=False)
+            results = next(result_generator)
+
+            if results["predictions"]:
+                # Assume the first detected person is the one we care about
+                person_result = results["predictions"][0][0]
+                keypoints = person_result["keypoints"]
+                confidences = person_result["keypoint_scores"]
+
+                all_keypoints.append(keypoints)
+                all_confidences.append(confidences)
+                frame_indices.append(i)
+
+        if "skeleton" in traj_group:
+            del traj_group["skeleton"]
+        skel_group = traj_group.create_group("skeleton")
+
+        if not all_keypoints:
+            logger.warning("No poses detected in the video.")
+            return traj_group
+
+        skel_group.create_dataset(
+            "positions", data=np.array(all_keypoints, dtype=np.float32)
+        )
+        skel_group.create_dataset(
+            "confidences", data=np.array(all_confidences, dtype=np.float32)
+        )
+        skel_group.create_dataset(
+            "frame_indices", data=np.array(frame_indices, dtype=np.int64)
+        )
+
+        logger.info(f"Saved {len(all_keypoints)} poses to {skel_group.name}")
+        return traj_group
 
 
 class HuggingFaceObjectDetectionTool(BaseTool):

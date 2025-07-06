@@ -24,7 +24,7 @@ dependencies = [
     "tqdm",
     "accelerate",
     "einops",
-    "jaxtyping",
+    "jaxtyping"
 ]
 
 [project.optional-dependencies]
@@ -40,16 +40,26 @@ dev = [
     "black>=23.0.0",
     "isort>=5.12.0",
     "mypy>=1.0.0",
+    "pre-commit",
+    "openmim",
+    "mmpose",
 ]
 full = [
     "open3d>=0.17.0",
+    "torchvision",
+    "torchaudio",
+    "transformers",
+    "accelerate",
+    "matplotlib",
+    "openmim",
+    "mmpose",
 ]
 
 [project.urls]
 "Homepage" = "https://github.com/istarirobotics/egohub"
 
 [project.scripts]
-egohub = "egohub.cli.main:main"
+egohub = "egohub.cli.main:app"
 
 [tool.setuptools.packages.find]
 include = ["egohub*"]
