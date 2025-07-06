@@ -77,22 +77,24 @@ def create_temp_video_from_img_dir(
 
     if quality == "optimal":
         # H.264 settings for "optimal" quality (fallback from AV1)
-        cmd_encoder_specific.extend([
-            "-c:v",
-            "libx264",
-            "-preset",
-            "medium",  # Balanced preset for H.264
-            "-crf",
-            "23",  # Constant Rate Factor for quality control
-            "-g",
-            "30",  # Keyframe interval
-            "-bf",
-            "3",  # B-frames
-            "-pix_fmt",
-            "yuv420p",  # Standard pixel format
-            "-c:a",
-            "copy",  # Copy audio stream without re-encoding
-        ])
+        cmd_encoder_specific.extend(
+            [
+                "-c:v",
+                "libx264",
+                "-preset",
+                "medium",  # Balanced preset for H.264
+                "-crf",
+                "23",  # Constant Rate Factor for quality control
+                "-g",
+                "30",  # Keyframe interval
+                "-bf",
+                "3",  # B-frames
+                "-pix_fmt",
+                "yuv420p",  # Standard pixel format
+                "-c:a",
+                "copy",  # Copy audio stream without re-encoding
+            ]
+        )
     else:
         # H.264 NVENC settings for other quality levels
         quality_settings = {
@@ -102,26 +104,28 @@ def create_temp_video_from_img_dir(
             "max": ("p1", "12"),
         }
         preset, cq_h264 = quality_settings[quality]
-        cmd_encoder_specific.extend([
-            "-c:v",
-            "h264_nvenc",
-            "-preset",
-            preset,
-            "-rc:v",
-            "vbr_hq",  # High quality variable bitrate mode
-            "-cq",
-            cq_h264,  # Quality level
-            "-b:v",
-            "0",  # Let CQ control bitrate
-            "-profile:v",
-            "high",  # High profile for better compression
-            "-g",
-            "30",  # Keyframe interval for H.264
-            "-bf",
-            "3",  # Maximum 3 B-frames between reference frames
-            "-pix_fmt",
-            "yuv420p",  # Standard pixel format for compatibility
-        ])
+        cmd_encoder_specific.extend(
+            [
+                "-c:v",
+                "h264_nvenc",
+                "-preset",
+                preset,
+                "-rc:v",
+                "vbr_hq",  # High quality variable bitrate mode
+                "-cq",
+                cq_h264,  # Quality level
+                "-b:v",
+                "0",  # Let CQ control bitrate
+                "-profile:v",
+                "high",  # High profile for better compression
+                "-g",
+                "30",  # Keyframe interval for H.264
+                "-bf",
+                "3",  # Maximum 3 B-frames between reference frames
+                "-pix_fmt",
+                "yuv420p",  # Standard pixel format for compatibility
+            ]
+        )
 
     # Combine base command, encoder specific commands, and output path
     cmd: list[str] = cmd_base + cmd_encoder_specific + [str(output_path)]
@@ -170,10 +174,14 @@ def _build_ffmpeg_base_command(
     cmd_base = ["ffmpeg", "-y"]
 
     if repair_corrupted:
-        cmd_base.extend([
-            "-err_detect", "ignore_err",
-            "-fflags", "+genpts+igndts",
-        ])
+        cmd_base.extend(
+            [
+                "-err_detect",
+                "ignore_err",
+                "-fflags",
+                "+genpts+igndts",
+            ]
+        )
 
     cmd_base.extend(["-i", str(input_video_path)])
     return cmd_base
@@ -182,26 +190,40 @@ def _build_ffmpeg_base_command(
 def _build_av1_encoder_command() -> list[str]:
     """Build FFmpeg command for AV1 NVENC encoding."""
     return [
-        "-c:v", "av1_nvenc",
-        "-preset", "p5",
-        "-cq", "30",
-        "-g", "2",
-        "-bf", "0",
-        "-pix_fmt", "yuv420p",
-        "-c:a", "copy",
+        "-c:v",
+        "av1_nvenc",
+        "-preset",
+        "p5",
+        "-cq",
+        "30",
+        "-g",
+        "2",
+        "-bf",
+        "0",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "copy",
     ]
 
 
 def _build_h264_encoder_command() -> list[str]:
     """Build FFmpeg command for H.264 encoding."""
     return [
-        "-c:v", "libx264",
-        "-preset", "medium",
-        "-crf", "23",
-        "-g", "30",
-        "-bf", "3",
-        "-pix_fmt", "yuv420p",
-        "-c:a", "copy",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "medium",
+        "-crf",
+        "23",
+        "-g",
+        "30",
+        "-bf",
+        "3",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "copy",
     ]
 
 
@@ -210,17 +232,28 @@ def _build_max_tolerance_command(
 ) -> list[str]:
     """Build FFmpeg command with maximum error tolerance."""
     return [
-        "ffmpeg", "-y",
-        "-err_detect", "ignore_err",
-        "-fflags", "+genpts+igndts+discardcorrupt",
-        "-i", str(input_video_path),
-        "-c:v", "libx264",
-        "-preset", "ultrafast",
-        "-crf", "28",
-        "-g", "1",
-        "-bf", "0",
-        "-pix_fmt", "yuv420p",
-        "-c:a", "copy",
+        "ffmpeg",
+        "-y",
+        "-err_detect",
+        "ignore_err",
+        "-fflags",
+        "+genpts+igndts+discardcorrupt",
+        "-i",
+        str(input_video_path),
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        "28",
+        "-g",
+        "1",
+        "-bf",
+        "0",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "copy",
         str(output_path),
     ]
 
@@ -459,14 +492,16 @@ def check_video_integrity(video_path: Path) -> dict:
 
         if "streams" in info and len(info["streams"]) > 0:
             stream = info["streams"][0]
-            result.update({
-                "is_valid": True,
-                "codec": stream.get("codec_name"),
-                "width": int(stream.get("width", 0)),
-                "height": int(stream.get("height", 0)),
-                "fps": eval(stream.get("r_frame_rate", "30/1")),
-                "frame_count": int(stream.get("nb_frames", 0)),
-            })
+            result.update(
+                {
+                    "is_valid": True,
+                    "codec": stream.get("codec_name"),
+                    "width": int(stream.get("width", 0)),
+                    "height": int(stream.get("height", 0)),
+                    "fps": eval(stream.get("r_frame_rate", "30/1")),
+                    "frame_count": int(stream.get("nb_frames", 0)),
+                }
+            )
         else:
             result["error"] = "No video streams found"
 

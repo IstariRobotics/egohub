@@ -150,15 +150,12 @@ def _process_trajectories(
     f: h5py.File, tools: list[BaseTool], num_trajectories: int | None
 ) -> None:
     """Process trajectories with the given tools."""
-    trajectory_keys = sorted([
-        key for key in f.keys() if key.startswith("trajectory_")
-    ])
+    trajectory_keys = sorted([key for key in f.keys() if key.startswith("trajectory_")])
 
     if num_trajectories:
         trajectory_keys = trajectory_keys[:num_trajectories]
         logger.info(
-            f"Processing the first {len(trajectory_keys)} trajectories as "
-            "requested."
+            f"Processing the first {len(trajectory_keys)} trajectories as " "requested."
         )
     else:
         logger.info(f"Found {len(trajectory_keys)} trajectories to process.")

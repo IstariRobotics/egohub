@@ -132,9 +132,9 @@ class EgocentricH5Dataset(BaseDatasetReader):
         frame_index = []
 
         with h5py.File(self.h5_path, "r") as f:
-            all_trajectories = sorted([
-                name for name in f.keys() if name.startswith("trajectory_")
-            ])  # type: ignore[attr-defined]
+            all_trajectories = sorted(
+                [name for name in f.keys() if name.startswith("trajectory_")]
+            )  # type: ignore[attr-defined]
 
             available_trajectories = (
                 trajectories if trajectories is not None else all_trajectories
@@ -238,10 +238,7 @@ class EgocentricH5Dataset(BaseDatasetReader):
     ) -> Dict[str, Union[torch.Tensor, Any]]:
         """Load skeleton tracking data."""
         skeleton_data = {}
-        if (
-            "skeleton/positions" in traj_group
-            and "skeleton/confidences" in traj_group
-        ):
+        if "skeleton/positions" in traj_group and "skeleton/confidences" in traj_group:
             positions = traj_group["skeleton/positions"][frame_idx]
             confidences = traj_group["skeleton/confidences"][frame_idx]
             skeleton_data["skeleton_positions"] = torch.from_numpy(positions).float()
@@ -250,14 +247,13 @@ class EgocentricH5Dataset(BaseDatasetReader):
             ).float()
 
             if "joint_names" in traj_group["skeleton"].attrs:
-                skeleton_data["skeleton_joint_names"] = (
-                    traj_group["skeleton"].attrs["joint_names"]
-                )
+                skeleton_data["skeleton_joint_names"] = traj_group["skeleton"].attrs[
+                    "joint_names"
+                ]
         return skeleton_data
 
     def _load_object_data(
-        self, traj_group: h5py.Group, frame_idx: int, f: h5py.File,
-        traj_name: str
+        self, traj_group: h5py.Group, frame_idx: int, f: h5py.File, traj_name: str
     ) -> Dict[str, Dict]:
         """Load object detection data."""
         objects_data = {}
@@ -396,9 +392,9 @@ class LatentSequenceDataset(Dataset):
         """
         sequence_index = []
         with h5py.File(self.h5_path, "r") as f:
-            all_trajectories = sorted([
-                name for name in f.keys() if name.startswith("trajectory_")
-            ])
+            all_trajectories = sorted(
+                [name for name in f.keys() if name.startswith("trajectory_")]
+            )
 
             available_trajectories = (
                 trajectories if trajectories is not None else all_trajectories

@@ -21,9 +21,9 @@ def test_image_encoder_output_shape(batch_size, out_features):
 
     # Check output shape
     expected_shape = (batch_size, out_features)
-    assert output.shape == expected_shape, (
-        f"Expected output shape {expected_shape}, but got {output.shape}"
-    )
+    assert (
+        output.shape == expected_shape
+    ), f"Expected output shape {expected_shape}, but got {output.shape}"
 
 
 @pytest.mark.parametrize(
@@ -43,6 +43,6 @@ def test_pose_encoder_output_shape(batch_size, in_features, out_features):
 
     # Check output shape
     expected_shape = (batch_size, out_features)
-    assert output.shape == expected_shape, (
-        f"Expected output shape {expected_shape}, but got {output.shape}"
-    )
+    assert (
+        output.shape == expected_shape
+    ), f"Expected output shape {expected_shape}, but got {output.shape}"

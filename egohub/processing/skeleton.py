@@ -37,9 +37,9 @@ class SkeletonProcessor:
         ):
             return None
 
-        joint_names = sorted([
-            name for name in transforms_group.keys() if name != "camera"
-        ])
+        joint_names = sorted(
+            [name for name in transforms_group.keys() if name != "camera"]
+        )
         if not joint_names:
             return None
 

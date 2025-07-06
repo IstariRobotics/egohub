@@ -35,9 +35,9 @@ class RerunExporter:
             rr.init("egocentric-h5-viewer", spawn=True)
 
         with h5py.File(h5_path, "r") as f:
-            traj_keys = sorted([
-                key for key in f.keys() if key.startswith("trajectory_")
-            ])
+            traj_keys = sorted(
+                [key for key in f.keys() if key.startswith("trajectory_")]
+            )
             if not traj_keys:
                 logger.error("No trajectories found in the HDF5 file.")
                 return
@@ -165,16 +165,18 @@ class RerunExporter:
 
         rr.log(
             "world/skeleton",
-            rr.AnnotationContext([
-                rr.ClassDescription(
-                    info=rr.AnnotationInfo(id=0, label="Canonical Skeleton"),
-                    keypoint_annotations=[
-                        rr.AnnotationInfo(id=i, label=name)
-                        for i, name in enumerate(CANONICAL_SKELETON_JOINTS)
-                    ],
-                    keypoint_connections=keypoint_connections,
-                )
-            ]),
+            rr.AnnotationContext(
+                [
+                    rr.ClassDescription(
+                        info=rr.AnnotationInfo(id=0, label="Canonical Skeleton"),
+                        keypoint_annotations=[
+                            rr.AnnotationInfo(id=i, label=name)
+                            for i, name in enumerate(CANONICAL_SKELETON_JOINTS)
+                        ],
+                        keypoint_connections=keypoint_connections,
+                    )
+                ]
+            ),
             static=True,
         )
 

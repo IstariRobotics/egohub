@@ -39,9 +39,9 @@ def test_kl_divergence_zero_when_perfect(vae_loss):
     # The KL divergence part of the loss should be zero
     loss_dict = vae_loss(model_output, batch_data)
 
-    assert torch.isclose(loss_dict["kl_divergence_loss"], torch.tensor(0.0)), (
-        "KL divergence should be zero for a perfect N(0,1) latent space."
-    )
+    assert torch.isclose(
+        loss_dict["kl_divergence_loss"], torch.tensor(0.0)
+    ), "KL divergence should be zero for a perfect N(0,1) latent space."
 
 
 def test_reconstruction_loss_correctness(vae_loss):

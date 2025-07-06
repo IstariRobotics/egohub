@@ -109,12 +109,14 @@ class EgoDexAdapter(BaseAdapter):
         for hdf5_path in hdf5_files:
             mp4_path = hdf5_path.with_suffix(".mp4")
             if mp4_path.exists():
-                sequences.append({
-                    "hdf5_path": hdf5_path,
-                    "mp4_path": mp4_path,
-                    "task_name": hdf5_path.parent.name,
-                    "sequence_name": hdf5_path.stem,
-                })
+                sequences.append(
+                    {
+                        "hdf5_path": hdf5_path,
+                        "mp4_path": mp4_path,
+                        "task_name": hdf5_path.parent.name,
+                        "sequence_name": hdf5_path.stem,
+                    }
+                )
 
         logging.info(f"Found {len(sequences)} sequences.")
         return sequences
@@ -133,8 +135,8 @@ class EgoDexAdapter(BaseAdapter):
 
         action_label_raw = f_in.attrs.get("llm_description", "N/A")
         if isinstance(action_label_raw, bytes):
-            action_label = (
-                action_label_raw.decode("utf-8", "replace").replace("\x00", "")
+            action_label = action_label_raw.decode("utf-8", "replace").replace(
+                "\x00", ""
             )
         elif isinstance(action_label_raw, str):
             action_label = action_label_raw.replace("\x00", "")
@@ -162,8 +164,11 @@ class EgoDexAdapter(BaseAdapter):
         return found_streams, master_timestamps_ns
 
     def _process_camera_data(
-        self, seq_info: dict, f_in: h5py.File, traj_group: h5py.Group,
-        master_timestamps_ns: np.ndarray
+        self,
+        seq_info: dict,
+        f_in: h5py.File,
+        traj_group: h5py.Group,
+        master_timestamps_ns: np.ndarray,
     ) -> set:
         """Process camera data including intrinsics, poses, and RGB."""
         found_streams = set()
@@ -175,10 +180,7 @@ class EgoDexAdapter(BaseAdapter):
 
         # Process intrinsics
         intrinsics_data = f_in.get("camera/intrinsic")
-        if (
-            isinstance(intrinsics_data, h5py.Dataset)
-            and intrinsics_data.shape[0] > 0
-        ):
+        if isinstance(intrinsics_data, h5py.Dataset) and intrinsics_data.shape[0] > 0:
             intrinsics = intrinsics_data[:]
         else:
             logging.warning(
@@ -220,8 +222,10 @@ class EgoDexAdapter(BaseAdapter):
         return found_streams
 
     def _process_rgb_data(
-        self, seq_info: dict, ego_camera_group: h5py.Group,
-        master_timestamps_ns: np.ndarray
+        self,
+        seq_info: dict,
+        ego_camera_group: h5py.Group,
+        master_timestamps_ns: np.ndarray,
     ) -> set:
         """Process RGB video data."""
         found_streams = set()
@@ -269,8 +273,7 @@ class EgoDexAdapter(BaseAdapter):
         return found_streams
 
     def _process_hand_data(
-        self, f_in: h5py.File, traj_group: h5py.Group,
-        master_timestamps_ns: np.ndarray
+        self, f_in: h5py.File, traj_group: h5py.Group, master_timestamps_ns: np.ndarray
     ) -> set:
         """Process hand tracking data."""
         found_streams = set()
@@ -288,9 +291,7 @@ class EgoDexAdapter(BaseAdapter):
                 pose_pipeline = TransformPipeline([arkit_to_canonical_poses])
                 canonical_hand_poses = pose_pipeline(raw_hand_poses)
 
-                hand_group.create_dataset(
-                    "pose_in_world", data=canonical_hand_poses
-                )
+                hand_group.create_dataset("pose_in_world", data=canonical_hand_poses)
                 found_streams.add(f"hands/{hand}/pose_in_world")
 
                 # Generate and save pose indices
@@ -300,15 +301,12 @@ class EgoDexAdapter(BaseAdapter):
                 )
                 hand_group.create_dataset("pose_indices", data=pose_indices)
             else:
-                logging.warning(
-                    f"No '{source_key}' data found in {f_in.filename}"
-                )
+                logging.warning(f"No '{source_key}' data found in {f_in.filename}")
 
         return found_streams
 
     def _process_skeleton_data(
-        self, f_in: h5py.File, traj_group: h5py.Group,
-        master_timestamps_ns: np.ndarray
+        self, f_in: h5py.File, traj_group: h5py.Group, master_timestamps_ns: np.ndarray
     ) -> set:
         """Process skeleton tracking data."""
         found_streams = set()
@@ -318,8 +316,9 @@ class EgoDexAdapter(BaseAdapter):
         transforms_group = f_in.get("transforms")
         confidences_group = f_in.get("confidences")
 
-        if (isinstance(transforms_group, h5py.Group) and
-            isinstance(confidences_group, h5py.Group)):
+        if isinstance(transforms_group, h5py.Group) and isinstance(
+            confidences_group, h5py.Group
+        ):
             # Use the pre-defined list of joints for EgoDex
             joint_names = self.source_joint_names
 

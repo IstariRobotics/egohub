@@ -129,8 +129,7 @@ CANONICAL_SKELETON_HIERARCHY: dict[str, str] = {
     "left_hand_middle_finger_metacarpal": "left_wrist",
     "left_hand_middle_finger_knuckle": "left_hand_middle_finger_metacarpal",
     "left_hand_middle_finger_intermediate_base": "left_hand_middle_finger_knuckle",
-    "left_hand_middle_finger_intermediate_tip": \
-        "left_hand_middle_finger_intermediate_base",
+    "left_hand_middle_finger_intermediate_tip": "left_hand_middle_finger_intermediate_base",
     "left_hand_middle_finger_tip": "left_hand_middle_finger_intermediate_tip",
     "left_hand_ring_finger_metacarpal": "left_wrist",
     "left_hand_ring_finger_knuckle": "left_hand_ring_finger_metacarpal",
@@ -140,8 +139,7 @@ CANONICAL_SKELETON_HIERARCHY: dict[str, str] = {
     "left_hand_little_finger_metacarpal": "left_wrist",
     "left_hand_little_finger_knuckle": "left_hand_little_finger_metacarpal",
     "left_hand_little_finger_intermediate_base": "left_hand_little_finger_knuckle",
-    "left_hand_little_finger_intermediate_tip": \
-        "left_hand_little_finger_intermediate_base",
+    "left_hand_little_finger_intermediate_tip": "left_hand_little_finger_intermediate_base",
     "left_hand_little_finger_tip": "left_hand_little_finger_intermediate_tip",
     # Right Hand
     "right_hand_thumb_knuckle": "right_wrist",
@@ -156,20 +154,17 @@ CANONICAL_SKELETON_HIERARCHY: dict[str, str] = {
     "right_hand_middle_finger_metacarpal": "right_wrist",
     "right_hand_middle_finger_knuckle": "right_hand_middle_finger_metacarpal",
     "right_hand_middle_finger_intermediate_base": "right_hand_middle_finger_knuckle",
-    "right_hand_middle_finger_intermediate_tip": \
-        "right_hand_middle_finger_intermediate_base",
+    "right_hand_middle_finger_intermediate_tip": "right_hand_middle_finger_intermediate_base",
     "right_hand_middle_finger_tip": "right_hand_middle_finger_intermediate_tip",
     "right_hand_ring_finger_metacarpal": "right_wrist",
     "right_hand_ring_finger_knuckle": "right_hand_ring_finger_metacarpal",
     "right_hand_ring_finger_intermediate_base": "right_hand_ring_finger_knuckle",
-    "right_hand_ring_finger_intermediate_tip": \
-        "right_hand_ring_finger_intermediate_base",
+    "right_hand_ring_finger_intermediate_tip": "right_hand_ring_finger_intermediate_base",
     "right_hand_ring_finger_tip": "right_hand_ring_finger_intermediate_tip",
     "right_hand_little_finger_metacarpal": "right_wrist",
     "right_hand_little_finger_knuckle": "right_hand_little_finger_metacarpal",
     "right_hand_little_finger_intermediate_base": "right_hand_little_finger_knuckle",
-    "right_hand_little_finger_intermediate_tip": \
-        "right_hand_little_finger_intermediate_base",
+    "right_hand_little_finger_intermediate_tip": "right_hand_little_finger_intermediate_base",
     "right_hand_little_finger_tip": "right_hand_little_finger_intermediate_tip",
 }
 
