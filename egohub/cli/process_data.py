@@ -155,7 +155,7 @@ def _process_trajectories(
     if num_trajectories:
         trajectory_keys = trajectory_keys[:num_trajectories]
         logger.info(
-            f"Processing the first {len(trajectory_keys)} trajectories as " "requested."
+            f"Processing the first {len(trajectory_keys)} trajectories as requested."
         )
     else:
         logger.info(f"Found {len(trajectory_keys)} trajectories to process.")
