@@ -204,8 +204,7 @@ class Points2DWithConfidence(rr.AsComponents):
             radii=radii,
         )
         self.confidences = ConfidenceBatch(confidences).or_with_descriptor_overrides(
-            archetype_name="user.CustomPoints2D",
-            archetype_field_name="confidences"
+            archetype_name="user.CustomPoints2D", archetype_field_name="confidences"
         )
 
     def as_component_batches(self) -> list[rr.DescribedComponentBatch]:
@@ -239,8 +238,7 @@ class Points3DWithConfidence(rr.ComponentColumn):
             radii=radii,
         )
         self.confidences = ConfidenceBatch(confidences).or_with_descriptor_overrides(
-            archetype_name="user.CustomPoints3D",
-            archetype_field_name="confidences"
+            archetype_name="user.CustomPoints3D", archetype_field_name="confidences"
         )
 
     def as_component_batches(self) -> list[rr.DescribedComponentBatch]:

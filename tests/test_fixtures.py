@@ -38,12 +38,12 @@ def test_hdf5_factory_parametrization(hdf5_file_factory):
     hdf5_path = hdf5_file_factory(num_trajectories=2, num_frames=10, add_skeleton=False)
 
     with h5py.File(hdf5_path, "r") as f:
-        assert "trajectory_0001" in f, (
-            "Should create the specified number of trajectories"
-        )
-        assert len(f["trajectory_0001/metadata/timestamps_ns"]) == 10, (
-            "Should create the specified number of frames"
-        )
-        assert "skeleton" not in f["trajectory_0001"], (
-            "Should respect the 'add_skeleton' flag"
-        )
+        assert (
+            "trajectory_0001" in f
+        ), "Should create the specified number of trajectories"
+        assert (
+            len(f["trajectory_0001/metadata/timestamps_ns"]) == 10
+        ), "Should create the specified number of frames"
+        assert (
+            "skeleton" not in f["trajectory_0001"]
+        ), "Should respect the 'add_skeleton' flag"

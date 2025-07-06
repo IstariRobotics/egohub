@@ -84,8 +84,12 @@ class Extrinsics:
         self, r: Float[ndarray, "3 3"], t: Float[ndarray, "3"]  # noqa: F722, N803
     ) -> Float[ndarray, "4 4"]:  # noqa: F722
         """Compose a 4x4 transformation matrix from rotation and translation."""
-        rt: Float[ndarray, "3 4"] = np.hstack([r, rearrange(t, "c -> c 1")])  # noqa: F722, N806
-        t_matrix: Float[ndarray, "4 4"] = np.vstack([rt, np.array([0, 0, 0, 1])])  # noqa: F722, N806
+        rt: Float[ndarray, "3 4"] = np.hstack(
+            [r, rearrange(t, "c -> c 1")]
+        )  # noqa: F722, N806
+        t_matrix: Float[ndarray, "4 4"] = np.vstack(
+            [rt, np.array([0, 0, 0, 1])]
+        )  # noqa: F722, N806
         return t_matrix
 
     def decompose_transformation_matrix(
@@ -119,11 +123,13 @@ class Intrinsics:
 
     def compute_k_matrix(self):
         """Compute the camera matrix using the focal length and principal point."""
-        self.k_matrix = np.array([
-            [self.fl_x, 0, self.cx],
-            [0, self.fl_y, self.cy],
-            [0, 0, 1],
-        ])
+        self.k_matrix = np.array(
+            [
+                [self.fl_x, 0, self.cx],
+                [0, self.fl_y, self.cy],
+                [0, 0, 1],
+            ]
+        )
 
     def __repr__(self):
         return (
@@ -239,7 +245,8 @@ def rescale_intri(
 
 
 def perspective_projection(
-    points_3d: Float[np.ndarray, "num_points 3"], k: Float[np.ndarray, "3 3"]  # noqa: F722, N803
+    points_3d: Float[np.ndarray, "num_points 3"],
+    k: Float[np.ndarray, "3 3"],  # noqa: F722, N803
 ) -> Float[np.ndarray, "num_points 2"]:  # noqa: F722
     """Project 3D points using perspective projection.
 
@@ -259,7 +266,8 @@ def perspective_projection(
 
 
 def arctan_projection(
-    points_3d: Float[np.ndarray, "num_points 3"], k: Float[np.ndarray, "3 3"]  # noqa: F722, N803
+    points_3d: Float[np.ndarray, "num_points 3"],
+    k: Float[np.ndarray, "3 3"],  # noqa: F722, N803
 ) -> Float[np.ndarray, "num_points 2"]:  # noqa: F722
     """Project 3D points using arctan projection (for fisheye cameras).
 
@@ -321,7 +329,8 @@ def apply_radial_tangential_distortion(
 
 
 def fisheye_projection(
-    points_3d_world: Float[ndarray, "num_points 3"], camera: Fisheye62Parameters  # noqa: F722
+    points_3d_world: Float[ndarray, "num_points 3"],
+    camera: Fisheye62Parameters,  # noqa: F722
 ) -> Float[ndarray, "num_points 2"]:  # noqa: F722
     """Project 3D world points using fisheye camera model.
 
@@ -334,9 +343,9 @@ def fisheye_projection(
         A numpy array containing the 2D projected coordinates of the points.
     """
     # Transform points to camera coordinates
-    points_cam = camera.extrinsics.cam_t_world_matrix @ to_homogeneous(
-        points_3d_world
-    ).T
+    points_cam = (
+        camera.extrinsics.cam_t_world_matrix @ to_homogeneous(points_3d_world).T
+    )
     points_cam = points_cam[:3, :].T
 
     # Project using arctan projection
