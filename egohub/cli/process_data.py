@@ -40,10 +40,7 @@ def get_args() -> argparse.Namespace:
         "--backend",
         type=str,
         required=True,
-        help=(
-            "The backend to use for the task "
-            "(e.g., 'HuggingFaceBackend')."
-        ),
+        help=("The backend to use for the task " "(e.g., 'HuggingFaceBackend')."),
     )
     parser.add_argument(
         "--backend-args",
