@@ -247,6 +247,12 @@ python egohub/cli/process_data.py \
     --tools HuggingFaceObjectDetectionTool
 ```
 
+Note you can define the model you would like you would like to use with the `--tool-args` argument
+
+```bash
+    --tool-args "HuggingFaceObjectDetectionTool:model_name=SenseTime/deformable-detr-with-box-refine"
+```
+
 **4. Visualize the Enriched Data**
 
 Finally, visualize the file again to see the newly added object bounding boxes.
@@ -273,7 +279,7 @@ This table lists the enrichment tools available for post-processing canonical HD
 
 | Tool Name                        | Tool Class                       | Dependencies            | Description                                                                                           |
 | :--------------------------------- | :--------------------------------- | :------------------------ | :------------------------------------------------------------------------------------------------------ |
-| **Hugging Face Object Detector** | `HuggingFaceObjectDetectionTool` | `torch`, `transformers` | Reads RGB frames, runs inference with a DETR model, and writes bounding boxes to the`objects/` group. |
+| **Hugging Face Object Detector** | `HuggingFaceObjectDetectionTool` | `torch`, `transformers` | Reads RGB frames, runs inference with any HF object detection model (default: DETR), and writes bounding boxes to the`objects/` group. |
 
 ## Canonical Data Schema
 
