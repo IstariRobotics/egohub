@@ -5,9 +5,33 @@
 └─┘└─┘└─┘┴ ┴└─┘└─┘</pre>
 </div>
 
-An end-to-end Python pipeline for ingesting, normalizing, and serving egocentric datasets for humanoid robotics research in a unified state and action format.
+# EgoHub
 
-[DeepWiki Link](https://deepwiki.com/IstariRobotics/egohub/)
+**A comprehensive Python library for processing egocentric human data for robotics research.**
+
+EgoHub provides an end-to-end pipeline for ingesting, normalizing, and serving egocentric datasets in a unified state and action format. Built with modularity and extensibility in mind, it handles the complete workflow from raw data to training-ready formats.
+
+## Core Features
+
+- **Video Processing**: Multi-camera video ingestion, synchronization, and frame extraction
+- **Skeleton Tracking**: Full-body pose estimation with canonical 22-joint SMPL-X format
+- **Camera Calibration**: Intrinsic and extrinsic parameter handling with coordinate transformations
+- **Data Export/Visualization**: Interactive 3D visualization with Rerun and flexible export formats
+- **Multiple Data Formats**: Support for various input formats with extensible adapter architecture
+
+## What EgoHub Does
+
+EgoHub transforms diverse egocentric datasets into a standardized HDF5 format that's ready for machine learning training. It handles the complex challenges of:
+- Temporal synchronization across multiple data streams
+- Coordinate system normalization and transformation
+- Data enrichment through modular processing tools imported from popular model repo services such as Hugging face
+- Visualization, Export (for Training) and debugging of complex multimodal data
+
+Perfect for researchers working on humanoid robotics, imitation learning, and egocentric computer vision applications.
+
+![EgoHub Pipeline Overview](docs/images/egohub_rr_example.png)
+
+## Core Features
 
 ## Architecture
 
