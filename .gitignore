@@ -204,3 +204,5 @@ cython_debug/
 # Project-specific
 projectplan.md
 .cursor/ 
+assets/mano/MANO_LEFT.pkl
+assets/mano/MANO_RIGHT.pkl
