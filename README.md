@@ -11,7 +11,7 @@
 
 EgoHub provides an end-to-end pipeline for ingesting, normalizing, and serving egocentric datasets in a unified state and action format. Built with modularity and extensibility in mind, it handles the complete workflow from raw data to training-ready formats.
 
-## Core Features
+**Core Features**
 
 - **Video Processing**: Multi-camera video ingestion, synchronization, and frame extraction
 - **Skeleton Tracking**: Full-body pose estimation with canonical 22-joint SMPL-X format
@@ -19,19 +19,20 @@ EgoHub provides an end-to-end pipeline for ingesting, normalizing, and serving e
 - **Data Export/Visualization**: Interactive 3D visualization with Rerun and flexible export formats
 - **Multiple Data Formats**: Support for various input formats with extensible adapter architecture
 
-## What EgoHub Does
+**What EgoHub Does**
 
 EgoHub transforms diverse egocentric datasets into a standardized HDF5 format that's ready for machine learning training. It handles the complex challenges of:
+
 - Temporal synchronization across multiple data streams
 - Coordinate system normalization and transformation
 - Data enrichment through modular processing tools imported from popular model repo services such as Hugging face
 - Visualization, Export (for Training) and debugging of complex multimodal data
 
-Perfect for researchers working on humanoid robotics, imitation learning, and egocentric computer vision applications.
+EgoHub has been developed for researchers working on humanoid robotics, imitation learning, and egocentric computer vision applications.
 
-![EgoHub Pipeline Overview](docs/images/egohub_rr_example.png)
+![EgoHub Pipeline Overview](docs/images/egohub_rr_example.png)*Interactive 3D visualization of egocentric data using Rerun, showing synchronized camera views, skeleton tracking, and object detection results.*
 
-## Core Features
+# Core Features
 
 ## Architecture
 
@@ -57,7 +58,7 @@ subgraph "Egocentric Data Processing Pipeline"
         direction TB
         ToolDetection["HuggingFace Model Tools"]
         ToolOther["Other Tools<br/>(Future Work)"]
-    
+  
         CanonicalH5 -->|Reads data| ToolDetection
         ToolDetection -->|Writes object data| CanonicalH5
         CanonicalH5 -.-> ToolOther
@@ -69,7 +70,7 @@ subgraph "Egocentric Data Processing Pipeline"
         subgraph "Visualization & Debugging"
             AppRerun["Rerun Visualizer"]
         end
-    
+  
         subgraph "Training Pipeline (Self-Supervised)"
             direction TB
             PytorchDS["PyTorch Dataset<br/>(EgocentricH5Dataset)"] --> VAE["1.Train MultimodalVAE"]
@@ -95,6 +96,7 @@ CanonicalH5 -.-> AppSim
 class RawData,Adapter,CanonicalH5,PytorchDS,VAE,LatentH5,Policy,AppRerun,ToolDetection built
 class ToolOther,AppSim,AppFinetune notBuilt
 ```
+
 _Completed modules marked in green; future work marked in grey._
 
 ## Project Structure
@@ -153,16 +155,18 @@ pre-commit install
 
 This project uses a suite of tools to ensure code quality and consistency.
 
-1.  **Formatting & Linting**: We use `ruff` for linting and `black` for formatting, run automatically via `pre-commit`.
-2.  **Type Checking**: `mypy` is used for static type analysis.
+1. **Formatting & Linting**: We use `ruff` for linting and `black` for formatting, run automatically via `pre-commit`.
+2. **Type Checking**: `mypy` is used for static type analysis.
 
 You can run all checks manually at any time:
+
 ```bash
 # Run all linters and type checkers
 make lint
 ```
 
 To run the core unit tests:
+
 ```bash
 # Run fast, deterministic unit tests
 make test
@@ -173,7 +177,9 @@ make test
 The following steps outline the key workflows supported by the library.
 
 #### 1. Conversion Workflow
+
 Convert a raw dataset (e.g., EgoDex) into the canonical HDF5 format. This is handled by a dedicated `Adapter`.
+
 ```bash
 egohub convert egodex \
     --raw-dir path/to/raw/EgoDex \
@@ -181,7 +187,9 @@ egohub convert egodex \
 ```
 
 #### 2. Enrichment Workflow
+
 Apply a processing `Tool` to the canonical HDF5 file to add new data. The example below uses the Hugging Face object detection tool to find objects in the video stream and add them to the file.
+
 ```bash
 python -m egohub.cli.process_data \
     --input-file data/processed/egodex.h5 \
@@ -189,14 +197,16 @@ python -m egohub.cli.process_data \
 ```
 
 #### 3. Visualization Workflow
+
 At any point, you can visualize the contents of an HDF5 file with Rerun. This is useful for inspecting the original data as well as any data added by enrichment tools.
+
 ```bash
 egohub visualize data/processed/egodex.h5
 ```
 
 ### End-to-End Example: EgoDex
 
-This example walks through the full pipeline for a single sequence from the EgoDex dataset, from raw data to visualization. 
+This example walks through the full pipeline for a single sequence from the EgoDex dataset, from raw data to visualization.
 
 **1. Data Setup**
 
@@ -224,6 +234,7 @@ egohub convert egodex \
     --output-file data/processed/EgoDex_add_remove_lid.hdf5 \
     --num-sequences 1
 ```
+
 This creates a new file at `data/processed/EgoDex_add_remove_lid.hdf5`.
 
 **3. Enrich with Object Detections**
@@ -235,6 +246,7 @@ python egohub/cli/process_data.py \
     --input-file data/processed/EgoDex_add_remove_lid.hdf5 \
     --tools HuggingFaceObjectDetectionTool
 ```
+
 **4. Visualize the Enriched Data**
 
 Finally, visualize the file again to see the newly added object bounding boxes.
@@ -247,9 +259,10 @@ egohub visualize data/processed/EgoDex_add_remove_lid.hdf5
 
 This table lists the datasets currently supported by `egohub` for ingestion. We welcome contributions for new adapters! See `CONTRIBUTING.md` for a guide on how to add one.
 
-| Dataset Name | CLI Identifier | Adapter Class     | Notes                                                  |
-| :----------- | :------------- | :---------------- | :----------------------------------------------------- |
-| **EgoDex**   | `egodex`       | `EgoDexAdapter`   | Supports video, camera pose, and hand/skeleton poses. |
+
+| Dataset Name | CLI Identifier | Adapter Class   | Notes                                                 |
+| :------------- | :--------------- | :---------------- | :------------------------------------------------------ |
+| **EgoDex**   | `egodex`       | `EgoDexAdapter` | Supports video, camera pose, and hand/skeleton poses. |
 
 Instructions on downoading datasets can be found in `README_DATASETS.md`.
 
@@ -257,9 +270,10 @@ Instructions on downoading datasets can be found in `README_DATASETS.md`.
 
 This table lists the enrichment tools available for post-processing canonical HDF5 files.
 
-| Tool Name                        | Tool Class                        | Dependencies      | Description                                                                 |
-| :------------------------------- | :-------------------------------- | :---------------- | :-------------------------------------------------------------------------- |
-| **Hugging Face Object Detector** | `HuggingFaceObjectDetectionTool`  | `torch`, `transformers` | Reads RGB frames, runs inference with a DETR model, and writes bounding boxes to the `objects/` group. |
+
+| Tool Name                        | Tool Class                       | Dependencies            | Description                                                                                           |
+| :--------------------------------- | :--------------------------------- | :------------------------ | :------------------------------------------------------------------------------------------------------ |
+| **Hugging Face Object Detector** | `HuggingFaceObjectDetectionTool` | `torch`, `transformers` | Reads RGB frames, runs inference with a DETR model, and writes bounding boxes to the`objects/` group. |
 
 ## Canonical Data Schema
 
@@ -269,12 +283,13 @@ All spatial data is transformed into a single **right-handed, Z-up** world coord
 
 Each HDF5 file can contain multiple trajectories, identified as `trajectory_{:04d}`. Within each trajectory, data is organized into logical groups according to the `Trajectory` dataclass:
 
-| Group Path                      | Dataclass Field      | Description                                                                                                                               |
-| :------------------------------ | :------------------- | :---------------------------------------------------------------------------------------------------------------------------------------- |
-| **`metadata/`**                 | `metadata: Metadata` | Contains high-level information like `uuid`, `source_dataset`, and a synchronized master `timestamps_ns` dataset.                          |
-| **`cameras/{camera_name}/`**    | `cameras: Dict`      | A group for each camera, where `{camera_name}` is a unique identifier (e.g., `ego_camera`). Contains `pose_in_world`, `intrinsics`, and `rgb` data. |
-| **`hands/{left,right}/`**       | `hands: Dict`        | Contains data related to hand tracking, such as `pose_in_world` and `pose_indices`.                                             |
-| **`skeleton/`** (optional)      | `skeleton: Skeleton` | Stores full-body skeleton tracking data. The skeleton structure is fixed to a canonical 22-joint definition based on SMPL-X (see `egohub/constants.py`), ensuring consistency across all datasets. The group contains `positions`, `confidences`, and `frame_indices`. |
+
+| Group Path                   | Dataclass Field      | Description                                                                                                                                                                                                                                                           |
+| :----------------------------- | :--------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`metadata/`**              | `metadata: Metadata` | Contains high-level information like`uuid`, `source_dataset`, and a synchronized master `timestamps_ns` dataset.                                                                                                                                                      |
+| **`cameras/{camera_name}/`** | `cameras: Dict`      | A group for each camera, where`{camera_name}` is a unique identifier (e.g., `ego_camera`). Contains `pose_in_world`, `intrinsics`, and `rgb` data.                                                                                                                    |
+| **`hands/{left,right}/`**    | `hands: Dict`        | Contains data related to hand tracking, such as`pose_in_world` and `pose_indices`.                                                                                                                                                                                    |
+| **`skeleton/`** (optional)   | `skeleton: Skeleton` | Stores full-body skeleton tracking data. The skeleton structure is fixed to a canonical 22-joint definition based on SMPL-X (see`egohub/constants.py`), ensuring consistency across all datasets. The group contains `positions`, `confidences`, and `frame_indices`. |
 
 **Note on Extensibility and Temporal Indices:** The base schema is intentionally minimal. Additional data can be added by enrichment **Tools**.
 
@@ -301,17 +316,16 @@ pytest
 
 The `egohub` pipeline is designed around a set of core principles to ensure it is modular, extensible, and easy to maintain. A recent refactoring effort has solidified this architecture.
 
-1.  **Separation of Concerns**: The library is organized into distinct, decoupled components.
-    *   **Adapters (`egohub/adapters`)**: Responsible *only* for ingesting raw, dataset-specific data and converting it to the canonical HDF5 format.
-    *   **Processing Components (`egohub/processing`)**: Smaller, reusable components that perform a single task, like coordinate transforms or video decoding. Adapters use these components to build their data conversion pipeline.
-    *   **Tools (`egohub/tools`)**: Post-processing modules that enrich an *existing* canonical HDF5 file with new data (e.g., running object detection). They are applied via a dedicated CLI script.
+1. **Separation of Concerns**: The library is organized into distinct, decoupled components.
 
-2.  **Configuration as Code**: All dataset-specific or environment-specific parameters (e.g., frame rates, camera intrinsics) are externalized into YAML files in the `configs/` directory. Each adapter automatically loads its corresponding config, eliminating hardcoded values and making it easy to add or modify dataset support.
-
-3.  **Schema as the Single Source of Truth**: The structure of the canonical data is formally defined using Python dataclasses in `egohub/schema.py`. This provides a single, unambiguous source of truth for the HDF5 layout, which is used by adapters for writing and can be used for validation.
-
+   * **Adapters (`egohub/adapters`)**: Responsible *only* for ingesting raw, dataset-specific data and converting it to the canonical HDF5 format.
+   * **Processing Components (`egohub/processing`)**: Smaller, reusable components that perform a single task, like coordinate transforms or video decoding. Adapters use these components to build their data conversion pipeline.
+   * **Tools (`egohub/tools`)**: Post-processing modules that enrich an *existing* canonical HDF5 file with new data (e.g., running object detection). They are applied via a dedicated CLI script.
+2. **Configuration as Code**: All dataset-specific or environment-specific parameters (e.g., frame rates, camera intrinsics) are externalized into YAML files in the `configs/` directory. Each adapter automatically loads its corresponding config, eliminating hardcoded values and making it easy to add or modify dataset support.
+3. **Schema as the Single Source of Truth**: The structure of the canonical data is formally defined using Python dataclasses in `egohub/schema.py`. This provides a single, unambiguous source of truth for the HDF5 layout, which is used by adapters for writing and can be used for validation.
 
 ### What is Supported
+
 - **End-to-End Pre-Training**: A full pipeline from raw EgoDex data to a pre-trained `LatentPolicyModel`.
 - **Unified Data Format**: A canonical HDF5 schema that supports multimodal and multi-camera data streams, defined in `egohub/schema.py`.
 - **Extensible Tooling**: A system for enriching canonical data with post-processing tools.
@@ -319,9 +333,8 @@ The `egohub` pipeline is designed around a set of core principles to ensure it i
 - **Two-Stage Training Architecture**: A VAE-based approach to learn a latent representation, followed by self-supervised pre-training of a temporal Transformer model.
 
 ### Future Work
+
 - **Downstream Task Fine-Tuning**: While this pipeline produces a pre-trained model, it does not yet include scripts for fine-tuning on specific tasks like imitation learning or reinforcement learning.
 - **Additional Data Enrichment**: The architecture is designed for future integration of tools for depth estimation, video segmentation, and automated labeling.
 - **Broader Dataset Support**: We welcome contributions of new `Adapters` to support more egocentric datasets like Ego4D, Epic-Kitchens, etc.
 - **Robotics Integration**: The ultimate goal is to bridge this data to robotics simulators and real-world hardware, a feature that is still in the planning phase.
-
-
