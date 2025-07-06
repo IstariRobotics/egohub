@@ -303,6 +303,11 @@ Here are some examples of how to combine tasks and backends.
 
 The `mmpose` library will automatically download the model on first use.
 
+**Note:** Pose estimation requires the `mmpose` optional dependency. Install it with:
+```bash
+pip install egohub[pose]
+```
+
 ```bash
 egohub process path/to/your.h5 \\
     --task PoseEstimationTask \\

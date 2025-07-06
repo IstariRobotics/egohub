@@ -68,9 +68,15 @@ class HuggingFaceBackend(BaseBackend):
 
             self.detector = pipeline(self.task_name, model=self.model_name)
         elif self.task_name == "pose-estimation":
-            from mmpose.apis import MMPoseInferencer
+            try:
+                from mmpose.apis import MMPoseInferencer  # type: ignore
 
-            self.detector = MMPoseInferencer(self.model_name)
+                self.detector = MMPoseInferencer(self.model_name)
+            except ImportError:
+                raise ImportError(
+                    "mmpose is required for pose estimation. "
+                    "Install it with: pip install egohub[pose] or pip install mmpose"
+                )
         else:
             raise ValueError(
                 f"Unsupported task for HuggingFaceBackend: {self.task_name}"
