@@ -184,8 +184,7 @@ class EgoDexAdapter(BaseAdapter):
             intrinsics = intrinsics_data[:]
         else:
             logging.warning(
-                f"No valid intrinsics found in {f_in.filename}. "
-                "Using default values."
+                f"No valid intrinsics found in {f_in.filename}. Using default values."
             )
             intrinsics = np.array(
                 [[736.6339, 0.0, 960.0], [0.0, 736.6339, 540.0], [0.0, 0.0, 1.0]],

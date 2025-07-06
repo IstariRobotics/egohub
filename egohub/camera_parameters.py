@@ -81,19 +81,22 @@ class Extrinsics:
             )
 
     def compose_transformation_matrix(
-        self, r: Float[ndarray, "3 3"], t: Float[ndarray, "3"]  # noqa: F722, N803
+        self,
+        r: Float[ndarray, "3 3"],  # noqa: F722
+        t: Float[ndarray, "3"],  # noqa: F722, N803
     ) -> Float[ndarray, "4 4"]:  # noqa: F722
         """Compose a 4x4 transformation matrix from rotation and translation."""
-        rt: Float[ndarray, "3 4"] = np.hstack(
+        rt: Float[ndarray, "3 4"] = np.hstack(  # noqa: F722
             [r, rearrange(t, "c -> c 1")]
         )  # noqa: F722, N806
-        t_matrix: Float[ndarray, "4 4"] = np.vstack(
+        t_matrix: Float[ndarray, "4 4"] = np.vstack(  # noqa: F722
             [rt, np.array([0, 0, 0, 1])]
         )  # noqa: F722, N806
         return t_matrix
 
     def decompose_transformation_matrix(
-        self, t_matrix: Float[ndarray, "4 4"]  # noqa: F722, N803
+        self,
+        t_matrix: Float[ndarray, "4 4"],  # noqa: F722, N803
     ) -> tuple[Float[ndarray, "3 3"], Float[ndarray, "3"]]:  # noqa: F722
         """Decompose a 4x4 transformation matrix into rotation and translation."""
         r: Float[ndarray, "3 3"] = t_matrix[:3, :3]  # noqa: F722, N806
@@ -245,7 +248,7 @@ def rescale_intri(
 
 
 def perspective_projection(
-    points_3d: Float[np.ndarray, "num_points 3"],
+    points_3d: Float[np.ndarray, "num_points 3"],  # noqa: F722
     k: Float[np.ndarray, "3 3"],  # noqa: F722, N803
 ) -> Float[np.ndarray, "num_points 2"]:  # noqa: F722
     """Project 3D points using perspective projection.
@@ -266,7 +269,7 @@ def perspective_projection(
 
 
 def arctan_projection(
-    points_3d: Float[np.ndarray, "num_points 3"],
+    points_3d: Float[np.ndarray, "num_points 3"],  # noqa: F722
     k: Float[np.ndarray, "3 3"],  # noqa: F722, N803
 ) -> Float[np.ndarray, "num_points 2"]:  # noqa: F722
     """Project 3D points using arctan projection (for fisheye cameras).
@@ -287,7 +290,8 @@ def arctan_projection(
 
 
 def apply_radial_tangential_distortion(
-    dist_coeffs: Distortion, points2d: Float[np.ndarray, "num_points 2"]  # noqa: F722
+    dist_coeffs: Distortion,
+    points2d: Float[np.ndarray, "num_points 2"],  # noqa: F722
 ) -> Float[np.ndarray, "num_points 2"]:  # noqa: F722
     """Apply radial and tangential distortion to 2D points.
 
@@ -329,7 +333,7 @@ def apply_radial_tangential_distortion(
 
 
 def fisheye_projection(
-    points_3d_world: Float[ndarray, "num_points 3"],
+    points_3d_world: Float[ndarray, "num_points 3"],  # noqa: F722
     camera: Fisheye62Parameters,  # noqa: F722
 ) -> Float[ndarray, "num_points 2"]:  # noqa: F722
     """Project 3D world points using fisheye camera model.

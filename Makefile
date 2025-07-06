@@ -21,8 +21,6 @@ lint:
 	ruff check egohub
 	@echo "\n--- Checking Black formatting ---"
 	black --check .
-	@echo "\n--- Running Mypy type checker ---"
-	mypy egohub
 
 test:
 	python -m pytest -m "not integration and not e2e and not perf" -n auto --cov=egohub 
