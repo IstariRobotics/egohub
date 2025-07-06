@@ -270,7 +270,7 @@ This table lists the datasets currently supported by `egohub` for ingestion. We 
 | :------------- | :--------------- | :---------------- | :------------------------------------------------------ |
 | **EgoDex**   | `egodex`       | `EgoDexAdapter` | Supports video, camera pose, and hand/skeleton poses. |
 
-Instructions on downoading datasets can be found in `README_DATASETS.md`.
+Instructions on downoading datasets can be found in [`docs/README_DATASETS.md`](docs/README_DATASETS.md).
 
 ## Supported Tools
 
