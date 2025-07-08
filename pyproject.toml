@@ -5,60 +5,49 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "egohub"
 version = "0.1.0"
-description = "A toolkit for egocentric data processing, conversion, and visualization."
-authors = [{ name = "James Ball", email = "james@istarirobotics.com" }]
-license = { text = "MIT Custom" }
+description = "A unified library for egocentric perception."
+authors = [
+    { name = "James Ball", email = "james@ball-family.com" },
+]
+license = { file = "LICENSE.txt" }
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "h5py",
-    "numpy==1.26.4",
-    "opencv-python",
-    "Pillow",
-    "PyYAML",
-    "rerun-sdk==0.16.0",
-    "scipy",
-    "timm",
+    "hydra-core",
+    "numpy",
     "torch",
-    "transformers",
-    "tqdm",
-    "accelerate",
-    "einops",
-    "jaxtyping"
+    "torchvision",
+    "pyyaml",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0.0",
-    "pytest-cov",
-    "pytest-xdist",
-    "pytest-regressions",
-    "ruff",
-    "hypothesis",
-    "codecov",
-    "typer[all]",
-    "black>=23.0.0",
-    "isort>=5.12.0",
-    "mypy>=1.0.0",
-    "pre-commit",
+    "egohub[all]",
 ]
-pose = [
-    "openmim",
-    "mmpose",
-]
-full = [
-    "open3d>=0.17.0",
-    "torchvision",
-    "torchaudio",
+all = [
+    "opencv-python",
+    "rerun-sdk",
+    "scikit-learn",
+    "tqdm",
     "transformers",
-    "accelerate",
-    "matplotlib",
-    "openmim",
-    "mmpose",
+    "ultralytics",
+]
+# For the temporal consistency post-processing
+temporal = [
+    "cupy-cuda11x"
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/istarirobotics/egohub"
+"Homepage" = "https://github.com/jleball/egohub"
+"Bug Tracker" = "https://github.com/jleball/egohub/issues"
 
 [project.scripts]
 egohub = "egohub.cli.main:main"
@@ -68,7 +57,7 @@ include = ["egohub*"]
 
 [tool.black]
 line-length = 88
-target-version = ['py311']
+target-version = ['py39']
 
 [tool.isort]
 profile = "black"
@@ -76,7 +65,7 @@ multi_line_output = 3
 line_length = 88
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.9"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
