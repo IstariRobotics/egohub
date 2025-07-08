@@ -23,15 +23,11 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-          cache: "pip"
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          # Core + dev extras (excluding problematic optional deps)
-          pip install -e ".[dev]" pytest-cov ruff hypothesis codecov
-          # Explicitly exclude problematic dependencies that cause build issues
-          pip uninstall -y mmpose openmim chumpy || true
+          python -m pip install --upgrade pip uv
+          uv pip install -e ".[dev]" pytest-cov ruff hypothesis codecov
 
       # ---------- Static Analysis ---------- #
       - name: Run Ruff (lint)
