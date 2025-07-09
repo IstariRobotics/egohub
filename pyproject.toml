@@ -20,13 +20,17 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "h5py",
-    "hydra-core",
-    "numpy",
     "torch",
     "torchvision",
+    "numpy",
+    "h5py",
     "pyyaml",
-    "einops",
+    "tqdm",
+    "scipy",
+    "rerun-sdk",
+    "opencv-python",
+    "smplx",
+    "jaxtyping",
 ]
 
 [project.optional-dependencies]
@@ -45,6 +49,7 @@ all = [
     "tqdm",
     "transformers",
     "ultralytics",
+    "jaxtyping",
 ]
 # For the temporal consistency post-processing
 temporal = [
