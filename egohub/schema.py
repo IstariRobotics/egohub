@@ -2,8 +2,25 @@
 Canonical Data Schema for the Egocentric Data Pipeline.
 
 This file defines the standard HDF5 structure for all processed datasets.
-Using a canonical schema ensures that the data is consistent and can be
+Using a canonical schema ensures that data is consistent and can be
 consumed by a single, unified dataloader and visualization tools.
+
+---
+Canonical Coordinate System Definition:
+- **Handedness**: Right-handed
+- **World Frame**:
+    - `+Z` is up
+    - `+Y` is forward (away from the camera)
+    - `+X` is to the right
+- **Camera Frame (OpenCV Pinhole Model)**:
+    - `+Z` is forward (into the scene)
+    - `+Y` is down
+    - `+X` is to the right
+- **Pose Convention**:
+    - All poses are stored as 4x4 homogeneous transformation matrices.
+    - These matrices represent the transform `T_world_local`, which transforms
+      a point from the entity's local frame into the world frame.
+---
 """
 
 from __future__ import annotations
