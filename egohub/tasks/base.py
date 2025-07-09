@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 
 import h5py
 
-from egohub.backends.base import BaseBackend
+if False:
+    from egohub.backends.base import BaseBackend
+
+
+logger = logging.getLogger(__name__)
 
 
 class BaseTask(ABC):
@@ -22,3 +27,15 @@ class BaseTask(ABC):
             **kwargs: Backend-specific arguments.
         """
         raise NotImplementedError
+
+
+def get_task(task_name: str) -> type[BaseTask]:
+    """Retrieves a task class by its name."""
+    from egohub import tasks
+
+    task_cls = getattr(tasks, task_name, None)
+    if task_cls is None:
+        raise ValueError(f"Unknown task: {task_name}")
+    if not issubclass(task_cls, BaseTask):
+        raise TypeError(f"{task_name} is not a valid Task class.")
+    return task_cls

@@ -122,16 +122,15 @@ class EgoDexAdapter(BaseAdapter):
         return sequences
 
     def _process_metadata(
-        self, seq_info: dict, f_in: h5py.File, traj_group: h5py.Group
-    ) -> tuple[set, np.ndarray]:
+        self, seq_info: dict, f_in: h5py.File
+    ) -> tuple[dict, np.ndarray]:
         """Process metadata and timestamps."""
-        found_streams = set()
+        metadata_dict = {}
 
         # --- Metadata ---
-        metadata_group = traj_group.create_group("metadata")
-        metadata_group.attrs["uuid"] = str(uuid.uuid4())
-        metadata_group.attrs["source_dataset"] = "EgoDex"
-        metadata_group.attrs["source_identifier"] = seq_info["sequence_name"]
+        metadata_dict["uuid"] = str(uuid.uuid4())
+        metadata_dict["source_dataset"] = "EgoDex"
+        metadata_dict["source_identifier"] = seq_info["sequence_name"]
 
         action_label_raw = f_in.attrs.get("llm_description", "N/A")
         if isinstance(action_label_raw, bytes):
@@ -143,40 +142,27 @@ class EgoDexAdapter(BaseAdapter):
         else:
             action_label = "N/A"
 
-        metadata_group.attrs["action_label"] = action_label
-        found_streams.add("metadata/action_label")
+        metadata_dict["action_label"] = action_label
 
         # --- Timestamps ---
-        # EgoDex does not provide explicit timestamps, so we generate them.
-        # We assume a constant frame rate of 30 FPS for all streams.
         num_frames_source = 0
         camera_transforms = f_in.get("transforms/camera")
         if isinstance(camera_transforms, h5py.Dataset):
             num_frames_source = camera_transforms.shape[0]
 
-        # Master timestamps are the definitive timeline for the trajectory.
         master_timestamps_ns = np.arange(num_frames_source) * (1e9 / 30.0)
-        metadata_group.create_dataset(
-            "timestamps_ns", data=master_timestamps_ns.astype(np.uint64)
-        )
-        found_streams.add("metadata/timestamps_ns")
+        metadata_dict["timestamps_ns"] = master_timestamps_ns.astype(np.uint64)
 
-        return found_streams, master_timestamps_ns
+        return {"metadata": metadata_dict}, master_timestamps_ns
 
     def _process_camera_data(
         self,
         seq_info: dict,
         f_in: h5py.File,
-        traj_group: h5py.Group,
         master_timestamps_ns: np.ndarray,
-    ) -> set:
+    ) -> dict:
         """Process camera data including intrinsics, poses, and RGB."""
-        found_streams = set()
-
-        # --- Camera Data ---
-        cameras_group = traj_group.create_group("cameras")
-        ego_camera_group = cameras_group.create_group("ego_camera")
-        ego_camera_group.attrs["is_ego"] = True
+        ego_camera_dict = {"is_ego": True}
 
         # Process intrinsics
         intrinsics_data = f_in.get("camera/intrinsic")
@@ -190,46 +176,36 @@ class EgoDexAdapter(BaseAdapter):
                 [[736.6339, 0.0, 960.0], [0.0, 736.6339, 540.0], [0.0, 0.0, 1.0]],
                 dtype=np.float32,
             )
-        ego_camera_group.create_dataset("intrinsics", data=intrinsics)
-        found_streams.add("cameras/ego_camera/intrinsics")
+        ego_camera_dict["intrinsics"] = intrinsics
 
         # Process camera poses
         camera_transforms_data = f_in.get("transforms/camera")
         if isinstance(camera_transforms_data, h5py.Dataset):
             raw_camera_poses = camera_transforms_data[:]
 
-            # Define a pipeline for pose transformation
             pose_pipeline = TransformPipeline([arkit_to_canonical_poses])
             canonical_camera_poses = pose_pipeline(raw_camera_poses)
 
-            ego_camera_group.create_dataset(
-                "pose_in_world", data=canonical_camera_poses
-            )
-            found_streams.add("cameras/ego_camera/pose_in_world")
+            ego_camera_dict["pose_in_world"] = canonical_camera_poses
 
-            # Generate and save pose indices
             stream_timestamps_ns = np.arange(raw_camera_poses.shape[0]) * (1e9 / 30.0)
             pose_indices = generate_indices(master_timestamps_ns, stream_timestamps_ns)
-            ego_camera_group.create_dataset("pose_indices", data=pose_indices)
+            ego_camera_dict["pose_indices"] = pose_indices
 
         # Process RGB data
-        rgb_streams = self._process_rgb_data(
-            seq_info, ego_camera_group, master_timestamps_ns
-        )
-        found_streams.update(rgb_streams)
+        rgb_dict = self._process_rgb_data(seq_info, master_timestamps_ns)
+        if rgb_dict:
+            ego_camera_dict["rgb"] = rgb_dict
 
-        return found_streams
+        return {"cameras": {"ego_camera": ego_camera_dict}}
 
     def _process_rgb_data(
         self,
         seq_info: dict,
-        ego_camera_group: h5py.Group,
         master_timestamps_ns: np.ndarray,
-    ) -> set:
+    ) -> dict:
         """Process RGB video data."""
-        found_streams = set()
-
-        rgb_group = ego_camera_group.create_group("rgb")
+        rgb_dict = {}
         cap = cv2.VideoCapture(str(seq_info["mp4_path"]))
         if cap.isOpened():
             temp_frames = []
@@ -245,181 +221,140 @@ class EgoDexAdapter(BaseAdapter):
 
             if temp_frames:
                 max_frame_size = max(len(f) for f in temp_frames)
-                image_dataset = rgb_group.create_dataset(
-                    "image_bytes",
-                    (len(temp_frames), max_frame_size),
-                    dtype=np.uint8,
+                image_bytes_array = np.empty(
+                    (len(temp_frames), max_frame_size), dtype=np.uint8
                 )
-                for i, frame_bytes in enumerate(temp_frames):
-                    padded_frame = frame_bytes + b"\x00" * (
-                        max_frame_size - len(frame_bytes)
-                    )
-                    image_dataset[i] = np.frombuffer(padded_frame, dtype=np.uint8)
-                rgb_group.create_dataset(
-                    "frame_sizes",
-                    data=[len(f) for f in temp_frames],
-                    dtype=np.int32,
-                )
-                found_streams.add("cameras/ego_camera/rgb/image_bytes")
+                frame_sizes_array = np.empty(len(temp_frames), dtype=np.uint64)
 
-                # Generate and save frame indices
+                for i, frame_bytes in enumerate(temp_frames):
+                    image_bytes_array[i, : len(frame_bytes)] = np.frombuffer(
+                        frame_bytes, dtype=np.uint8
+                    )
+                    frame_sizes_array[i] = len(frame_bytes)
+
+                rgb_dict["image_bytes"] = image_bytes_array
+                rgb_dict["frame_sizes"] = frame_sizes_array
+
                 stream_timestamps_ns = np.arange(len(temp_frames)) * (1e9 / 30.0)
                 frame_indices = generate_indices(
                     master_timestamps_ns, stream_timestamps_ns
                 )
-                rgb_group.create_dataset("frame_indices", data=frame_indices)
-
-        return found_streams
+                rgb_dict["frame_indices"] = frame_indices
+        return rgb_dict
 
     def _process_hand_data(
-        self, f_in: h5py.File, traj_group: h5py.Group, master_timestamps_ns: np.ndarray
-    ) -> set:
-        """Process hand tracking data."""
-        found_streams = set()
-
-        # --- Hand Data ---
-        hands_group = traj_group.create_group("hands")
+        self, f_in: h5py.File, master_timestamps_ns: np.ndarray
+    ) -> dict:
+        """Process hand presence data."""
+        hand_data_dict = {}
         for hand in ["left", "right"]:
-            hand_group = hands_group.create_group(hand)
-            source_key = f"transforms/{hand.title()}Hand"
-            hand_transforms = f_in.get(source_key)
-            if isinstance(hand_transforms, h5py.Dataset):
-                raw_hand_poses = hand_transforms[:]
-
-                # Reuse the same pipeline
-                pose_pipeline = TransformPipeline([arkit_to_canonical_poses])
-                canonical_hand_poses = pose_pipeline(raw_hand_poses)
-
-                hand_group.create_dataset("pose_in_world", data=canonical_hand_poses)
-                found_streams.add(f"hands/{hand}/pose_in_world")
-
-                # Generate and save pose indices
-                stream_timestamps_ns = np.arange(raw_hand_poses.shape[0]) * (1e9 / 30.0)
-                pose_indices = generate_indices(
+            is_present_data = f_in.get(f"hand/{hand}/is_present")
+            if isinstance(is_present_data, h5py.Dataset):
+                is_present = is_present_data[:].astype(np.bool_)
+                stream_timestamps_ns = np.arange(len(is_present)) * (1e9 / 30.0)
+                is_present_indices = generate_indices(
                     master_timestamps_ns, stream_timestamps_ns
                 )
-                hand_group.create_dataset("pose_indices", data=pose_indices)
-            else:
-                logging.warning(f"No '{source_key}' data found in {f_in.filename}")
-
-        return found_streams
+                hand_data_dict[f"{hand}_hand"] = {
+                    "is_present": is_present,
+                    "is_present_indices": is_present_indices,
+                }
+        return {"hands": hand_data_dict} if hand_data_dict else {}
 
     def _process_skeleton_data(
-        self, f_in: h5py.File, traj_group: h5py.Group, master_timestamps_ns: np.ndarray
-    ) -> set:
-        """Process skeleton tracking data."""
-        found_streams = set()
-
-        # --- Skeleton Data ---
-        skeleton_group = traj_group.create_group("skeleton")
-        transforms_group = f_in.get("transforms")
+        self, f_in: h5py.File, master_timestamps_ns: np.ndarray
+    ) -> dict:
+        """Processes skeleton data and remaps it to the canonical format."""
+        transforms_group = f_in.get("transforms/body")
         confidences_group = f_in.get("confidences")
 
         if isinstance(transforms_group, h5py.Group) and isinstance(
             confidences_group, h5py.Group
         ):
-            # Use the pre-defined list of joints for EgoDex
             joint_names = self.source_joint_names
+            if not joint_names:
+                return {}
 
-            if joint_names:
-                positions_list, confidences_list = [], []
-                for joint_name in joint_names:
-                    joint_transform = transforms_group.get(joint_name)
-                    if isinstance(joint_transform, h5py.Dataset):
-                        # Extract the translation part of the 4x4 matrix
-                        positions_list.append(joint_transform[:, :3, 3])
-                    else:
-                        # If a joint is missing, fill with zeros for now
-                        positions_list.append(
-                            np.zeros(
-                                (master_timestamps_ns.shape[0], 3), dtype=np.float32
-                            )
+            positions_list, confidences_list = [], []
+            for joint_name in joint_names:
+                joint_transform = transforms_group.get(joint_name)
+                if isinstance(joint_transform, h5py.Dataset):
+                    positions_list.append(joint_transform[:, :3, 3])
+                else:
+                    positions_list.append(
+                        np.zeros(
+                            (master_timestamps_ns.shape[0], 3), dtype=np.float32
                         )
-
-                    joint_conf = confidences_group.get(joint_name)
-                    if isinstance(joint_conf, h5py.Dataset):
-                        confidences_list.append(joint_conf[:])
-                    else:
-                        confidences_list.append(
-                            np.zeros(master_timestamps_ns.shape[0], dtype=np.float32)
-                        )
-
-                if positions_list and confidences_list:
-                    source_positions = np.stack(positions_list, axis=1)
-                    all_confidences = np.stack(confidences_list, axis=1)
-
-                    # 1. Transform coordinates from ARKit to our canonical system
-                    pose_pipeline = TransformPipeline([arkit_to_canonical_poses])
-                    source_positions_canonical_coords = pose_pipeline(source_positions)
-
-                    # 2. Remap the skeleton to the canonical joint definition
-                    canonical_positions, canonical_confidences = remap_skeleton(
-                        source_positions=source_positions_canonical_coords,
-                        source_confidences=all_confidences,
-                        source_joint_names=self.source_joint_names,
-                        joint_map=EGODEX_TO_CANONICAL_SKELETON_MAP,
                     )
 
-                    skeleton_group.create_dataset(
-                        "positions", data=canonical_positions.astype(np.float32)
+                joint_conf = confidences_group.get(joint_name)
+                if isinstance(joint_conf, h5py.Dataset):
+                    confidences_list.append(joint_conf[:])
+                else:
+                    confidences_list.append(
+                        np.zeros(master_timestamps_ns.shape[0], dtype=np.float32)
                     )
-                    found_streams.add("skeleton/positions")
-                    skeleton_group.create_dataset(
-                        "confidences", data=canonical_confidences.astype(np.float32)
-                    )
-                    found_streams.add("skeleton/confidences")
 
-                    # Generate and save frame indices
-                    stream_timestamps_ns = np.arange(source_positions.shape[0]) * (
-                        1e9 / 30.0
-                    )
-                    frame_indices = generate_indices(
-                        master_timestamps_ns, stream_timestamps_ns
-                    )
-                    skeleton_group.create_dataset("frame_indices", data=frame_indices)
+            if not positions_list or not confidences_list:
+                return {}
 
-        return found_streams
+            source_positions = np.stack(positions_list, axis=1)
+            all_confidences = np.stack(confidences_list, axis=1)
 
-    def process_sequence(self, seq_info: dict, traj_group: h5py.Group):
+            pose_pipeline = TransformPipeline([arkit_to_canonical_poses])
+            source_positions_canonical_coords = pose_pipeline(source_positions)
+
+            canonical_positions, canonical_confidences = remap_skeleton(
+                source_positions=source_positions_canonical_coords,
+                source_confidences=all_confidences,
+                source_joint_names=self.source_joint_names,
+                joint_map=EGODEX_TO_CANONICAL_SKELETON_MAP,
+            )
+
+            if canonical_positions is not None and canonical_confidences is not None:
+                stream_timestamps_ns = np.arange(canonical_positions.shape[0]) * (
+                    1e9 / 30.0
+                )
+                indices = generate_indices(master_timestamps_ns, stream_timestamps_ns)
+                return {
+                    "skeleton": {
+                        "positions": canonical_positions,
+                        "confidences": canonical_confidences,
+                        "position_indices": indices,
+                        "confidence_indices": indices,
+                    }
+                }
+        return {}
+
+    def process_sequence(self, seq_info: dict) -> dict:
         """
-        Processes a single sequence and writes its data to the given HDF5 group.
-
-        Args:
-            seq_info (dict): A dictionary containing paths and names for the sequence.
-            traj_group (h5py.Group): The HDF5 group to write the processed data into.
+        Processes a single EgoDex sequence and returns it as a dictionary.
         """
-        logging.info(
-            f"--- Processing sequence: {seq_info['task_name']}/"
-            f"{seq_info['sequence_name']} ---"
-        )
-        found_streams = set()
+        try:
+            with h5py.File(seq_info["hdf5_path"], "r") as f_in:
+                # 1. Process Metadata and get master timeline
+                metadata_dict, master_timestamps_ns = self._process_metadata(
+                    seq_info, f_in
+                )
 
-        with h5py.File(seq_info["hdf5_path"], "r") as f_in:
-            # Process metadata and get master timestamps
-            metadata_streams, master_timestamps_ns = self._process_metadata(
-                seq_info, f_in, traj_group
-            )
-            found_streams.update(metadata_streams)
+                # 2. Process other data streams
+                camera_dict = self._process_camera_data(
+                    seq_info, f_in, master_timestamps_ns
+                )
+                hand_dict = self._process_hand_data(f_in, master_timestamps_ns)
+                skeleton_dict = self._process_skeleton_data(
+                    f_in, master_timestamps_ns
+                )
 
-            # Process camera data
-            camera_streams = self._process_camera_data(
-                seq_info, f_in, traj_group, master_timestamps_ns
-            )
-            found_streams.update(camera_streams)
+                # 3. Combine all parts into a single trajectory dictionary
+                traj_dict = {
+                    **metadata_dict,
+                    **camera_dict,
+                    **hand_dict,
+                    **skeleton_dict,
+                }
+                return traj_dict
 
-            # Process hand data
-            hand_streams = self._process_hand_data(
-                f_in, traj_group, master_timestamps_ns
-            )
-            found_streams.update(hand_streams)
-
-            # Process skeleton data
-            skeleton_streams = self._process_skeleton_data(
-                f_in, traj_group, master_timestamps_ns
-            )
-            found_streams.update(skeleton_streams)
-
-        logging.info(
-            f"Finished processing sequence. Found streams: "
-            f"{sorted(list(found_streams))}"
-        )
+        except Exception as e:
+            logging.error(f"Failed to process sequence {seq_info['hdf5_path']}: {e}")
+            return {}

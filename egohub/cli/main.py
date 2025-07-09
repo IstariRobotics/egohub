@@ -92,6 +92,12 @@ def _setup_convert_parser(subparsers):
         help="The path to the output HDF5 file.",
     )
     parser_convert.add_argument(
+        "--format",
+        choices=["hdf5", "rrd"],
+        default="hdf5",
+        help="The output file format (default: hdf5).",
+    )
+    parser_convert.add_argument(
         "--num-sequences", type=int, help="Optional number of sequences to process."
     )
 
