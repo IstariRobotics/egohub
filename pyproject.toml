@@ -11,7 +11,7 @@ authors = [
 ]
 license = { file = "LICENSE.txt" }
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = "~=3.9"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -31,11 +31,14 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "egohub[all]",
+    "ruff",
+    "black",
 ]
 all = [
     "opencv-python",
     "rerun-sdk",
     "scikit-learn",
+    "timm",
     "tqdm",
     "transformers",
     "ultralytics",
@@ -79,6 +82,7 @@ exclude = ["next/"]
 [tool.ruff]
 # Match black line-length for consistency
 line-length = 88
+target-version = "py39"
 # Enable a broad set of useful rules:
 # E, F: pycodestyle & pyflakes (core)
 # W: pycodestyle warnings

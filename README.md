@@ -246,7 +246,8 @@ Next, run an enrichment tool to add more data to the file. We'll use the `Object
 ```bash
 egohub process data/processed/EgoDex_add_remove_lid.hdf5 \
     --task ObjectDetectionTask \
-    --backend HuggingFaceBackend
+    --backend HuggingFaceBackend \
+    --backend-args "model_name=facebook/detr-resnet-50"
 ```
 
 Note you can define the model you would like you would like to use with the `--backend-args` argument:
@@ -292,7 +293,7 @@ The new modular architecture separates **Tasks** (what to do) from **Backends** 
 
 | Backend Name              | Backend Class           | Dependencies                  | Compatible Tasks        | Notes                                                              |
 | :------------------------ | :---------------------- | :---------------------------- | :---------------------- | :----------------------------------------------------------------- |
-| **Hugging Face**          | `HuggingFaceBackend`    | `transformers`, `mmpose`      | `ObjectDetectionTask`, `PoseEstimationTask` | Can run various object detection and pose models from the HF Hub.    |
+| **Hugging Face**          | `HuggingFaceBackend`    | `transformers`, `mmpose`, `timm`      | `ObjectDetectionTask`, `PoseEstimationTask` | Can run various object detection and pose models from the HF Hub.    |
 
 
 ### Usage Examples
