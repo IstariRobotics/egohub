@@ -170,14 +170,15 @@ def _setup_validate_parser(subparsers):
 
 def _handle_convert_command(args):
     """Handle the convert command."""
-    adapter_class = ADAPTER_MAP[args.dataset]
-    adapter = adapter_class(args.raw_dir, args.output_file)
-    adapter.run(num_sequences=args.num_sequences)
-
-    # --- Automatic Validation Step ---
-    logging.basicConfig(level=logging.INFO)
-    logging.info(f"Conversion complete. Validating output file: {args.output_file}")
     try:
+        adapter_class = ADAPTER_MAP[args.dataset]
+        adapter = adapter_class(args.raw_dir, args.output_file)
+        adapter.run(num_sequences=args.num_sequences)
+
+        # --- Automatic Validation Step ---
+        logging.basicConfig(level=logging.INFO)
+        logging.info(f"Conversion complete. Validating output file: {args.output_file}")
+        
         with h5py.File(args.output_file, "r") as f:
             for traj_name, traj_group in f.items():
                 if isinstance(traj_group, h5py.Group) and traj_name.startswith(
@@ -197,6 +198,15 @@ def _handle_convert_command(args):
         # Optionally, clean up the invalid file
         # args.output_file.unlink()
         exit(1)  # Exit with an error code
+    except FileNotFoundError:
+        logging.error(f"Error: Output file not found after conversion: {args.output_file}")
+        logging.error("This likely means the adapter failed to find any sequences to process or could not write the output file.")
+        exit(1)
+    except Exception as e:
+        logging.error(f"An unexpected error occurred during conversion: {e}")
+        import traceback
+        traceback.print_exc()
+        exit(1)
 
 
 def _handle_visualize_command(args):
