@@ -2,6 +2,8 @@
 Base classes for dataset adapters.
 """
 
+from __future__ import annotations
+
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -49,7 +51,7 @@ class BaseAdapter(ABC):
             return {}
 
         logging.info(f"Loading configuration from {config_path}...")
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             try:
                 return yaml.safe_load(f)
             except yaml.YAMLError as e:
@@ -69,7 +71,7 @@ class BaseAdapter(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def discover_sequences(self) -> list[dict]:
+    def discover_sequences(self) -> List[Dict[str, Any]]:
         """
         Discovers all processable data sequences in the raw_dir.
 
@@ -83,7 +85,7 @@ class BaseAdapter(ABC):
         pass
 
     @abstractmethod
-    def process_sequence(self, seq_info: dict, traj_group: h5py.Group):
+    def process_sequence(self, seq_info: Dict[str, Any], traj_group: h5py.Group):
         """
         Processes a single data sequence and writes it to the HDF5 group.
 
@@ -91,13 +93,13 @@ class BaseAdapter(ABC):
         and writing logic resides.
 
         Args:
-            seq_info (dict): A dictionary from the list returned by
+            seq_info (Dict[str, Any]): A dictionary from the list returned by
                 discover_sequences().
             traj_group (h5py.Group): The HDF5 group to write the processed data into.
         """
         pass
 
-    def run(self, num_sequences: int | None = None):
+    def run(self, num_sequences: Optional[int] = None):
         """
         Main loop to discover, process, and save all sequences.
 
@@ -107,7 +109,7 @@ class BaseAdapter(ABC):
         3. Iterates through sequences, calling process_sequence() for each one.
 
         Args:
-            num_sequences (int | None): If specified, only process the first
+            num_sequences (Optional[int]): If specified, only process the first
                                         `num_sequences` sequences.
         """
         logging.info(f"Input directory: {self.raw_dir}")

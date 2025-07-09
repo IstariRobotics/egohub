@@ -131,7 +131,7 @@ def log_video(
         rr.log(str(video_log_path), video_asset, static=True)
 
         # Send automatically determined video frame timestamps.
-        frame_timestamps_ns: Int[ndarray, "num_frames"] = (
+        frame_timestamps_ns: Int[ndarray, num_frames] = (
             video_asset.read_frame_timestamps_ns()
         )
         rr.send_columns(

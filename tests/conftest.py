@@ -72,7 +72,7 @@ def hdf5_file_factory(tmpdir_factory):
                     rgb_group = cam1_group.create_group("rgb")
                     # Store dummy byte data for images
                     dummy_frame_data = [
-                        f"frame_{j}".encode("utf-8") for j in range(num_frames)
+                        f"frame_{j}".encode() for j in range(num_frames)
                     ]
                     rgb_group.create_dataset(
                         "image_bytes",

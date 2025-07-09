@@ -17,9 +17,8 @@ def test_extrinsics_inversion_from_world_to_cam():
 
     # The computed inverse transform should, when multiplied by the original,
     # yield the identity matrix.
-    identity_matrix = extrinsics.world_t_cam_matrix @ extrinsics.cam_t_world_matrix
-
-    assert np.allclose(identity_matrix, np.eye(4), atol=1e-7)
+    identity_matrix = extrinsics.world_h_cam @ extrinsics.cam_h_world
+    assert np.allclose(identity_matrix, np.eye(4))
 
 
 def test_extrinsics_inversion_from_cam_to_world():
@@ -33,9 +32,8 @@ def test_extrinsics_inversion_from_cam_to_world():
 
     extrinsics = Extrinsics(cam_r_world=cam_r_world, cam_t_world=cam_t_world)
 
-    identity_matrix = extrinsics.cam_t_world_matrix @ extrinsics.world_t_cam_matrix
-
-    assert np.allclose(identity_matrix, np.eye(4), atol=1e-7)
+    identity_matrix = extrinsics.cam_h_world @ extrinsics.world_h_cam
+    assert np.allclose(identity_matrix, np.eye(4))
 
 
 def test_extrinsics_raises_error_if_insufficient_info():
