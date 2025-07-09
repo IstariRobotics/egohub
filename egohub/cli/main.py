@@ -13,7 +13,7 @@ import egohub.backends
 import egohub.tasks
 from egohub.adapters.base import BaseAdapter
 from egohub.backends.base import BaseBackend
-from egohub.exporters.rerun import RerunExporter
+from egohub.exporters.rerun_exporter import RerunExporter
 from egohub.schema import SchemaValidationError, Trajectory, validate_hdf5_with_schema
 from egohub.tasks.base import BaseTask
 
@@ -244,7 +244,8 @@ def _handle_process_command(args):
         backend_kwargs["task_name"] = task_name
 
     # Instantiate task and backend
-    task_instance = task_class()
+    output_group_name = task_class.__name__.replace("Task", "").lower()
+    task_instance = task_class(output_group_name=output_group_name)
     try:
         backend_instance = backend_class(**backend_kwargs)
     except (TypeError, FileNotFoundError) as e:

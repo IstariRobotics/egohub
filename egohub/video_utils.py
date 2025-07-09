@@ -9,9 +9,10 @@ import atexit
 import io
 import subprocess
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 from timeit import default_timer as timer
-from typing import Iterator
+from typing import Optional
 
 import cv2
 import h5py
@@ -22,7 +23,7 @@ from PIL import Image
 def _setup_output_path(
     input_video_path: Path,
     save_file: bool,
-    output_directory: Path | None,
+    output_directory: Optional[Path],
     delete_on_exit: bool,
 ) -> Path:
     """Set up the output path for the re-encoded video."""
@@ -157,7 +158,7 @@ def reencode_video_optimal(
     input_video_path: Path,
     delete_on_exit: bool = True,
     save_file: bool = False,
-    output_directory: Path | None = None,
+    output_directory: Optional[Path] = None,
     repair_corrupted: bool = True,
 ) -> Path:
     """Re-encode an existing video file to AV1 using optimal NVIDIA GPU
@@ -280,28 +281,33 @@ def get_video_info(video_path: Path) -> dict:
 def hdf5_to_cv2_video(
     rgb_group: h5py.Group,
 ) -> Iterator[np.ndarray]:
-    """Extracts and decodes video frames from an HDF5 group.
+    """
+    A generator function that decodes and yields video frames from an HDF5 group.
 
     Args:
-        rgb_group: The HDF5 group containing 'image_bytes' and 'frame_sizes'
-                   datasets. This is assumed to be the 'rgb' group under a
-                   specific camera (e.g., 'ego_camera').
+        rgb_group: The HDF5 group containing 'frame_sizes', 'image_bytes',
+                   and 'frame_indices' datasets.
 
     Yields:
-        OpenCV (numpy) images in BGR format.
+        Individual video frames as NumPy arrays.
     """
-    image_bytes_dset = rgb_group["image_bytes"]
-    frame_sizes_dset = rgb_group["frame_sizes"]
+    frame_sizes_dset = rgb_group.get("frame_sizes")
+    image_bytes_dset = rgb_group.get("image_bytes")
+    frame_indices_dset = rgb_group.get("frame_indices")
 
-    for i in range(len(frame_sizes_dset)):
+    assert isinstance(frame_sizes_dset, h5py.Dataset)
+    assert isinstance(image_bytes_dset, h5py.Dataset)
+    assert isinstance(frame_indices_dset, h5py.Dataset)
+
+    total_frames = len(frame_sizes_dset)
+    for i in range(total_frames):
         num_bytes = frame_sizes_dset[i]
         encoded_frame = image_bytes_dset[i, :num_bytes]
 
-        # Decode the image from memory
-        image = Image.open(io.BytesIO(encoded_frame))
+        # Decode the image from bytes
+        image_stream = io.BytesIO(encoded_frame)
+        image = Image.open(image_stream)
+        frame_np = np.array(image)
 
-        # Convert to numpy array and then to BGR for OpenCV
-        frame_rgb = np.array(image)
-        frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
-
-        yield frame_bgr
+        # Rerun expects BGR, so we convert from RGB
+        yield cv2.cvtColor(frame_np, cv2.COLOR_RGB2BGR)

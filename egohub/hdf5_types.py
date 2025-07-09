@@ -7,7 +7,8 @@ string-key access without us needing a concrete subclass of ``h5py.Group``.
 
 from __future__ import annotations
 
-from typing import Iterator, Protocol, runtime_checkable
+from collections.abc import Iterator
+from typing import Protocol, runtime_checkable
 
 import h5py
 
