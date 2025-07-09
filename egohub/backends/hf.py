@@ -10,7 +10,7 @@ from PIL import Image
 from tqdm import tqdm
 
 from egohub.backends.base import BaseBackend
-from egohub.video_utils import hdf5_to_cv2_video
+from egohub.utils.video_utils import hdf5_to_cv2_video
 
 logger = logging.getLogger(__name__)
 

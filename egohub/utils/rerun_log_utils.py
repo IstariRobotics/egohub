@@ -14,10 +14,10 @@ from uuid import UUID
 import numpy as np
 import pyarrow as pa
 import rerun as rr
-from jaxtyping import Float, Int, UInt8
+from jaxtyping import Float, UInt8
 from numpy import ndarray
 
-from egohub.camera_parameters import PinholeParameters
+from egohub.utils.camera_parameters import CameraParameters
 
 
 def get_safe_application_id() -> str:
@@ -72,7 +72,7 @@ class RerunTyroConfig:
 
 
 def log_pinhole(
-    camera: PinholeParameters,
+    camera: CameraParameters,
     cam_log_path: Path,
     image_plane_distance: float = 0.5,
     static: bool = False,
@@ -89,7 +89,7 @@ def log_pinhole(
     rr.log(
         f"{cam_log_path}/pinhole",
         rr.Pinhole(
-            image_from_camera=camera.intrinsics.k_matrix,
+            image_from_camera=camera.intrinsics.k,
             height=camera.intrinsics.height,
             width=camera.intrinsics.width,
             camera_xyz=getattr(
@@ -114,7 +114,7 @@ def log_pinhole(
 
 def log_video(
     video_path: Path, video_log_path: Path, timeline: str = "video_time"
-) -> Int[ndarray, "num_frames"]:
+) -> ndarray:
     """Log video asset and frame timestamps.
 
     Args:
@@ -131,9 +131,7 @@ def log_video(
         rr.log(str(video_log_path), video_asset, static=True)
 
         # Send automatically determined video frame timestamps.
-        frame_timestamps_ns: Int[ndarray, num_frames] = (
-            video_asset.read_frame_timestamps_ns()
-        )
+        frame_timestamps_ns = video_asset.read_frame_timestamps_ns()
         rr.send_columns(
             f"{video_log_path}",
             # Note timeline values don't have to be the same as the video timestamps.
@@ -187,12 +185,12 @@ class Points2DWithConfidence(rr.AsComponents):
 
     def __init__(
         self: Any,
-        positions: Float[ndarray, "n_kpts 2"],
-        confidences: Float[ndarray, "n_kpts"],  # Confidence values for each point
+        positions: Float[ndarray, "..., 2"],
+        confidences: Float[ndarray, "..."],  # Confidence values for each point
         class_ids: int,
         keypoint_ids: list[int],
         show_labels: bool = False,
-        colors: UInt8[ndarray, "n_kpts 3"] | None = None,
+        colors: UInt8[ndarray, "..., 3"] | None = None,
         radii: float | None = None,
     ) -> None:
         self.points2d = rr.Points2D(
@@ -221,12 +219,12 @@ class Points3DWithConfidence(rr.ComponentColumn):
 
     def __init__(
         self: Any,
-        positions: Float[ndarray, "n_kpts 3"],
-        confidences: Float[ndarray, "n_kpts"],  # Confidence values for each point
+        positions: Float[ndarray, "..., 3"],
+        confidences: Float[ndarray, "..."],  # Confidence values for each point
         class_ids: int,
         keypoint_ids: list[int],
         show_labels: bool = False,
-        colors: UInt8[ndarray, "n_kpts 3"] | None = None,
+        colors: UInt8[ndarray, "..., 3"] | None = None,
         radii: float | None = None,
     ) -> None:
         self.points3d = rr.Points3D(
@@ -250,8 +248,8 @@ class Points3DWithConfidence(rr.ComponentColumn):
 
 
 def confidence_scores_to_rgb(
-    confidence_scores: Float[ndarray, "n_frames n_kpts 1"],
-) -> UInt8[ndarray, "n_frames n_kpts 3"]:
+    confidence_scores: Float[ndarray, "..., 1"],
+) -> UInt8[ndarray, "..., 3"]:
     """Convert confidence scores to RGB colors using a Red-Yellow-Green gradient.
 
     The color mapping is as follows:
@@ -271,16 +269,14 @@ def confidence_scores_to_rgb(
         represented as an array of three integers [R, G, B].
     """
     n_frames, n_kpts, _ = confidence_scores.shape
-    clipped_confidences: Float[ndarray, "n_frames n_kpts 1"] = np.clip(
+    clipped_confidences: Float[ndarray, "..., 1"] = np.clip(
         confidence_scores, a_min=0.0, a_max=1.0
     )
-    clipped_confidences: Float[ndarray, "n_frames n_kpts"] = np.squeeze(
+    clipped_confidences: Float[ndarray, "..."] = np.squeeze(
         clipped_confidences, axis=-1
     )
 
-    colors: UInt8[ndarray, "n_frames n_kpts 3"] = np.zeros(
-        (n_frames, n_kpts, 3), dtype=np.uint8
-    )
+    colors: UInt8[ndarray, "..., 3"] = np.zeros((n_frames, n_kpts, 3), dtype=np.uint8)
     # Segment A: red → yellow for conf ≤ 0.5
     mask_low = clipped_confidences <= 0.5
     if mask_low.any():
