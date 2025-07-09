@@ -65,7 +65,7 @@ class Camera:
     )
     pose_indices: np.ndarray = field(metadata={"shape": (-1,), "dtype": np.uint64})
     is_ego: bool = field(metadata={"h5_type": "attr"})
-    rgb: Optional["Rgb"] = None
+    rgb: Optional[Rgb] = None
 
 
 @dataclass

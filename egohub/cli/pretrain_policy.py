@@ -16,9 +16,7 @@ def get_causal_mask(size: int) -> torch.Tensor:
     """
     mask = (torch.triu(torch.ones(size, size)) == 1).transpose(0, 1)
     mask = (
-        mask.float()
-        .masked_fill(mask == 0, float("-inf"))
-        .masked_fill(mask == 1, float(0.0))
+        mask.float().masked_fill(mask == 0, float("-inf")).masked_fill(mask == 1, 0.0)
     )
     return mask
 

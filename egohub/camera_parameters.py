@@ -100,7 +100,7 @@ class Extrinsics:
     ) -> tuple[Float[ndarray, "3 3"], Float[ndarray, "3"]]:  # noqa: F722
         """Decompose a 4x4 transformation matrix into rotation and translation."""
         r: Float[ndarray, "3 3"] = t_matrix[:3, :3]  # noqa: F722, N806
-        t: Float[ndarray, "3"] = t_matrix[:3, 3]  # noqa: F722, N806
+        t: Float[ndarray, 3] = t_matrix[:3, 3]  # noqa: F722, N806
         return r, t
 
 

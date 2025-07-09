@@ -13,7 +13,7 @@ import io
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import h5py
 import numpy as np
@@ -60,7 +60,7 @@ class EgocentricH5Dataset(BaseDatasetReader):
         h5_path: Union[str, Path],
         trajectories: Optional[List[str]] = None,
         camera_streams: Optional[List[str]] = None,
-        transform: Optional[callable] = None,
+        transform: Optional[Callable] = None,
     ):
         self.h5_path = Path(h5_path)
         self.transform = transform
@@ -93,7 +93,7 @@ class EgocentricH5Dataset(BaseDatasetReader):
                 return []
 
             cameras_group = f.get(f"{first_traj_name}/cameras")
-            if not cameras_group:
+            if not isinstance(cameras_group, h5py.Group):
                 logging.warning(
                     f"No 'cameras' group found in trajectory {first_traj_name}."
                 )
@@ -148,6 +148,11 @@ class EgocentricH5Dataset(BaseDatasetReader):
                     continue
 
                 traj_group = f[traj_name]
+                if not isinstance(traj_group, h5py.Group):
+                    logging.warning(
+                        f"'{traj_name}' is not a valid trajectory group, skipping."
+                    )
+                    continue
 
                 # Determine number of frames. We need at least one camera stream.
                 if not self.camera_streams:
@@ -159,10 +164,13 @@ class EgocentricH5Dataset(BaseDatasetReader):
                 # Use the first configured camera stream to determine frame count
                 main_camera = self.camera_streams[0]
                 pose_path = f"cameras/{main_camera}/pose_in_world"
-                if pose_path in traj_group:  # type: ignore[operator]
-                    num_frames = traj_group[pose_path].shape[0]
-                elif "metadata/timestamps_ns" in traj_group:
-                    num_frames = traj_group["metadata/timestamps_ns"].shape[0]
+                pose_dset = traj_group.get(pose_path)
+                timestamps_dset = traj_group.get("metadata/timestamps_ns")
+
+                if isinstance(pose_dset, h5py.Dataset):
+                    num_frames = pose_dset.shape[0]
+                elif isinstance(timestamps_dset, h5py.Dataset):
+                    num_frames = timestamps_dset.shape[0]
                 else:
                     logging.warning(
                         f"Cannot determine frame count for {traj_name}, skipping."
@@ -188,31 +196,36 @@ class EgocentricH5Dataset(BaseDatasetReader):
 
         for cam_name in self.camera_streams:
             cam_group_path = f"cameras/{cam_name}"
-            if cam_group_path not in traj_group:
+            cam_group = traj_group.get(cam_group_path)
+            if not isinstance(cam_group, h5py.Group):
                 continue
-
-            cam_group = traj_group[cam_group_path]
 
             # Load RGB image
             rgb_path = f"{cam_group_path}/rgb"
-            if str(rgb_path) in f:
-                rgb_grp = f[str(rgb_path)]
-                if isinstance(rgb_grp, h5py.Group) and "image_bytes" in rgb_grp:
-                    num_bytes = rgb_grp["frame_sizes"][frame_idx]
-                    encoded_frame = rgb_grp["image_bytes"][frame_idx, :num_bytes]
+            rgb_grp = f.get(str(rgb_path))
+            if isinstance(rgb_grp, h5py.Group) and "image_bytes" in rgb_grp:
+                frame_sizes_dset = rgb_grp.get("frame_sizes")
+                image_bytes_dset = rgb_grp.get("image_bytes")
+                if isinstance(frame_sizes_dset, h5py.Dataset) and isinstance(
+                    image_bytes_dset, h5py.Dataset
+                ):
+                    num_bytes = frame_sizes_dset[frame_idx]
+                    encoded_frame = image_bytes_dset[frame_idx, :num_bytes]
                     img_tensor = torch.from_numpy(
                         np.array(Image.open(io.BytesIO(encoded_frame)))
                     )
                     rgb_data[cam_name] = img_tensor.permute(2, 0, 1)  # HWC to CHW
 
             # Load camera pose
-            if "pose_in_world" in cam_group:
-                pose = cam_group["pose_in_world"][frame_idx]
+            pose_dset = cam_group.get("pose_in_world")
+            if isinstance(pose_dset, h5py.Dataset):
+                pose = pose_dset[frame_idx]
                 camera_pose_data[cam_name] = torch.from_numpy(pose).float()
 
             # Load camera intrinsics (static)
-            if "intrinsics" in cam_group:
-                intrinsics = cam_group["intrinsics"][:]
+            intrinsics_dset = cam_group.get("intrinsics")
+            if isinstance(intrinsics_dset, h5py.Dataset):
+                intrinsics = intrinsics_dset[:]
                 camera_intrinsics_data[cam_name] = torch.from_numpy(intrinsics).float()
 
         return {
@@ -228,8 +241,9 @@ class EgocentricH5Dataset(BaseDatasetReader):
         hand_data = {}
         for hand in ["left", "right"]:
             hand_key = f"hands/{hand}/pose_in_world"
-            if hand_key in traj_group:  # type: ignore[operator]
-                pose = traj_group[hand_key][frame_idx]
+            pose_dset = traj_group.get(hand_key)
+            if isinstance(pose_dset, h5py.Dataset):
+                pose = pose_dset[frame_idx]
                 hand_data[f"{hand}_hand_pose"] = torch.from_numpy(pose).float()
         return hand_data
 
@@ -238,18 +252,28 @@ class EgocentricH5Dataset(BaseDatasetReader):
     ) -> Dict[str, Union[torch.Tensor, Any]]:
         """Load skeleton tracking data."""
         skeleton_data = {}
-        if "skeleton/positions" in traj_group and "skeleton/confidences" in traj_group:
-            positions = traj_group["skeleton/positions"][frame_idx]
-            confidences = traj_group["skeleton/confidences"][frame_idx]
+        positions_dset = traj_group.get("skeleton/positions")
+        confidences_dset = traj_group.get("skeleton/confidences")
+
+        if isinstance(positions_dset, h5py.Dataset) and isinstance(
+            confidences_dset, h5py.Dataset
+        ):
+            positions = positions_dset[frame_idx]
+            confidences = confidences_dset[frame_idx]
             skeleton_data["skeleton_positions"] = torch.from_numpy(positions).float()
             skeleton_data["skeleton_confidences"] = torch.from_numpy(
                 confidences
             ).float()
 
-            if "joint_names" in traj_group["skeleton"].attrs:
-                skeleton_data["skeleton_joint_names"] = traj_group["skeleton"].attrs[
+            skeleton_group = traj_group.get("skeleton")
+            if (
+                isinstance(skeleton_group, h5py.Group)
+                and "joint_names" in skeleton_group.attrs
+            ):
+                skeleton_data["skeleton_joint_names"] = skeleton_group.attrs[
                     "joint_names"
                 ]
+
         return skeleton_data
 
     def _load_object_data(
@@ -257,16 +281,20 @@ class EgocentricH5Dataset(BaseDatasetReader):
     ) -> Dict[str, Dict]:
         """Load object detection data."""
         objects_data = {}
-        objects_path = Path(traj_name) / "objects"
-        if str(objects_path) in f:
-            objects_grp = f[str(objects_path)]
-            if isinstance(objects_grp, h5py.Group):
-                for obj_label, obj_grp in objects_grp.items():
-                    if isinstance(obj_grp, h5py.Group):
-                        objects_data[obj_label] = {
-                            "bboxes_2d": obj_grp["bboxes_2d"][frame_idx],
-                            "scores": obj_grp["scores"][frame_idx],
-                        }
+        objects_group = traj_group.get("objects")
+        if not isinstance(objects_group, h5py.Group):
+            return objects_data
+
+        for obj_name, obj_group in objects_group.items():
+            if isinstance(obj_group, h5py.Group):
+                for dset_name, dset in obj_group.items():
+                    if isinstance(dset, h5py.Dataset):
+                        group_name = dset_name.rsplit("_", 1)[0]
+                        if group_name not in objects_data:
+                            objects_data[group_name] = {}
+                        objects_data[group_name][obj_name] = torch.from_numpy(
+                            dset[frame_idx]
+                        )
         return objects_data
 
     def __getitem__(self, idx: int) -> Dict[str, Union[str, int, torch.Tensor, Dict]]:
@@ -276,7 +304,10 @@ class EgocentricH5Dataset(BaseDatasetReader):
         traj_name, frame_idx = self.frame_index[idx]
 
         with h5py.File(self.h5_path, "r") as f:
-            traj_group = f[traj_name]
+            traj_group = f.get(traj_name)
+            if not isinstance(traj_group, h5py.Group):
+                # This should not happen if the index is built correctly
+                raise ValueError(f"Trajectory {traj_name} not found or not a group.")
 
             result: Dict[str, Union[str, int, torch.Tensor, Dict]] = {
                 "trajectory_name": traj_name,
@@ -350,17 +381,15 @@ class EgocentricH5Dataset(BaseDatasetReader):
 
 class LatentSequenceDataset(Dataset):
     """
-    PyTorch Dataset for loading sequences of latent vectors from HDF5 files.
+    A PyTorch Dataset for loading sequences of latent vectors.
 
-    This dataset is designed for Stage 2 of the pre-training pipeline. It loads
-    fixed-length sequences of latent vectors to be used for training temporal models
-    like Transformers or LSTMs.
+    This dataset is designed for training sequence models like transformers or
+    RNNs on top of pre-encoded latent representations of egocentric data.
 
     Args:
-        h5_path: Path to the HDF5 file containing latent vectors.
-        sequence_length: The length of the latent vector sequences to return.
-        trajectories: Optional list of trajectory names to include. If None,
-            includes all.
+        h5_path: Path to the HDF5 file.
+        sequence_length: The length of the sequences to be returned.
+        trajectories: Optional list of trajectory names to include.
     """
 
     def __init__(
@@ -425,6 +454,7 @@ class LatentSequenceDataset(Dataset):
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         traj_name, start_idx = self.sequence_index[idx]
+        start_idx + self.sequence_length
 
         with h5py.File(self.h5_path, "r") as f:
             latents = f[f"{traj_name}/latent/mean"][
