@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from egohub.camera_parameters import Extrinsics
+from egohub.utils.camera_parameters import Extrinsics
 
 
 def test_extrinsics_inversion_from_world_to_cam():
