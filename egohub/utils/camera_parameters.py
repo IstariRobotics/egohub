@@ -91,6 +91,7 @@ class CameraIntrinsics:
     cy: float
     height: Optional[int] = None
     width: Optional[int] = None
+    camera_conventions: str = "RUB"
 
     @property
     def k(self) -> np.ndarray:
