@@ -103,7 +103,11 @@ class EgoDexAdapter(BaseAdapter):
         Discovers all paired HDF5 and MP4 sequences in the raw data directory.
         """
         sequences = []
-        logging.info(f"Searching for sequences in '{self.raw_dir}' (absolute path: '{self.raw_dir.resolve()}')...")
+        logging.info(
+            "Searching for sequences in '%s' (absolute path: '%s')...",
+            self.raw_dir,
+            self.raw_dir.resolve(),
+        )
         hdf5_files = sorted(list(self.raw_dir.glob("**/*.hdf5")))
 
         for hdf5_path in hdf5_files:
