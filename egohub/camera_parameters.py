@@ -65,7 +65,7 @@ class Extrinsics:
             self.world_t_cam = -np.transpose(self.cam_r_world) @ self.cam_t_world
 
     @property
-    def world_h_cam(self) -> Float[np.ndarray, "4 4"]:
+    def world_h_cam(self) -> np.ndarray:
         """Homogeneous transformation from camera to world coordinates."""
         h = np.eye(4)
         h[:3, :3] = self.world_r_cam
@@ -73,7 +73,7 @@ class Extrinsics:
         return h
 
     @property
-    def cam_h_world(self) -> Float[np.ndarray, "4 4"]:
+    def cam_h_world(self) -> np.ndarray:
         """Homogeneous transformation from world to camera coordinates."""
         h = np.eye(4)
         h[:3, :3] = self.cam_r_world
@@ -93,7 +93,7 @@ class CameraIntrinsics:
     width: Optional[int] = None
 
     @property
-    def K(self) -> Float[np.ndarray, "3 3"]:
+    def k(self) -> np.ndarray:
         """The 3x3 camera matrix."""
         return np.array([[self.fx, 0, self.cx], [0, self.fy, self.cy], [0, 0, 1]])
 
@@ -130,6 +130,4 @@ class CameraParameters:
             Distortion(*distortion_data[:].tolist()) if distortion_data else None
         )
 
-        return cls(
-            intrinsics=intrinsics, extrinsics=extrinsics, distortion=distortion
-        )
+        return cls(intrinsics=intrinsics, extrinsics=extrinsics, distortion=distortion)
