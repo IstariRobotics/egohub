@@ -107,26 +107,96 @@ The repository is organized to clearly separate the core library, configuration,
 egohub/
 ├── configs/                  # External YAML configurations for adapters (e.g., egodex.yaml)
 ├── egohub/                   # Core, installable library source code
-│   ├── adapters/             # Data ingestion classes (EgoDexAdapter, etc.)
-│   │   └── base.py           # Base class that all adapters inherit from.
-│   ├── cli/                  # Argparse-based CLI applications.
-│   │   ├── main.py           # Main entry point for commands like 'convert'.
-│   │   └── main.py           # Main CLI interface with convert, visualize, process, and validate commands.
-│   ├── processing/           # Granular, reusable data processing components.
-│   │   ├── hand.py           # Logic for hand pose processing.
-│   │   └── video.py          # Logic for video decoding.
-│   ├── tasks/                # Data processing tasks (pose estimation, object detection).
-│   ├── backends/             # Model backends for inference.
-│   │   ├── base.py           # Base class for all tools.
-│   │   └── hf_tools.py       # Tool(s) using the Hugging Face library.
-│   ├── models/               # VAE and Policy models for training.
+│   ├── adapters/             # Data ingestion classes
+│   │   ├── base.py           # Base class that all adapters inherit from
+│   │   ├── egodex/           # EgoDex dataset adapter
+│   │   │   ├── __init__.py   # Package initialization
+│   │   │   └── egodex.py     # EgoDexAdapter implementation
+│   │   └── [other_adapters]/ # Other dataset adapters (same structure)
+│   ├── cli/                  # Argparse-based CLI applications
+│   │   ├── main.py           # Main entry point for commands like 'convert'
+│   │   └── main.py           # Main CLI interface with convert, visualize, process, and validate commands
+│   ├── processing/           # Granular, reusable data processing components
+│   │   ├── hand.py           # Logic for hand pose processing
+│   │   └── video.py          # Logic for video decoding
+│   ├── tasks/                # Data processing tasks (pose estimation, object detection)
+│   ├── backends/             # Model backends for inference
+│   │   ├── base.py           # Base class for all tools
+│   │   └── hf_tools.py       # Tool(s) using the Hugging Face library
+│   ├── models/               # VAE and Policy models for training
 │   ├── exporters/            # Data exporting classes (RerunExporter, etc.)
-│   ├── schema.py             # Canonical HDF5 schema defined with dataclasses.
+│   ├── schema.py             # Canonical HDF5 schema defined with dataclasses
 │   └── ...                   # Other core modules (datasets, training, etc.)
-├── tests/                    # Test suite for unit and integration tests.
-└── data/                     # Data storage (gitignored).
-    ├── raw/                  # For storing original, downloaded datasets.
-    └── processed/            # For storing canonical HDF5 files.
+├── tests/                    # Test suite for unit and integration tests
+└── data/                     # Data storage (gitignored)
+    ├── raw/                  # For storing original, downloaded datasets
+    └── processed/            # For storing canonical HDF5 files
+```
+
+## Adapter Architecture
+
+EgoHub uses a modular adapter system to support different dataset formats. Each adapter is organized in its own folder and follows a consistent structure:
+
+### Adapter Organization
+
+```
+egohub/adapters/
+├── base.py                    # Base adapter class with common functionality
+├── egodex/                    # EgoDex dataset adapter
+│   ├── __init__.py           # Package initialization
+│   └── egodex.py             # EgoDexAdapter implementation
+└── [other_adapters]/         # Other dataset adapters (same structure)
+    ├── __init__.py
+    └── [adapter_name].py     # Adapter implementation
+```
+
+### Configuration System
+
+Adapter configurations are stored in the project root `configs/` directory:
+
+```
+configs/
+├── egodex.yaml              # EgoDex adapter configuration
+└── [other_adapters].yaml    # Other adapter configurations
+```
+
+The `BaseAdapter` class automatically loads configuration files by:
+1. First looking in the adapter's own folder (`adapters/[adapter_name]/[adapter_name].yaml`)
+2. Falling back to the project root configs directory (`configs/[adapter_name].yaml`)
+
+### Adding a New Adapter
+
+To add support for a new dataset:
+
+1. Create a new folder in `adapters/` named after your adapter
+2. Create the adapter implementation file (e.g., `my_adapter.py`)
+3. Create a configuration file in `configs/my_adapter.yaml`
+4. Implement the required methods from `BaseAdapter`
+
+Example:
+```python
+from egohub.adapters.base import BaseAdapter
+
+class MyAdapter(BaseAdapter):
+    name = "my_adapter"
+    
+    @property
+    def source_joint_names(self) -> List[str]:
+        # Return list of joint names for your dataset
+        pass
+    
+    @property
+    def source_skeleton_hierarchy(self) -> Dict[str, str]:
+        # Return skeleton hierarchy for your dataset
+        pass
+    
+    def discover_sequences(self) -> List[Dict[str, Any]]:
+        # Discover sequences in raw data
+        pass
+    
+    def process_sequence(self, seq_info: Dict[str, Any], traj_group: h5py.Group):
+        # Process a single sequence
+        pass
 ```
 
 ## Quick Start
@@ -359,10 +429,10 @@ The `egohub` pipeline is designed around a set of core principles to ensure it i
 
 1. **Separation of Concerns**: The library is organized into distinct, decoupled components.
 
-   * **Adapters (`egohub/adapters`)**: Responsible *only* for ingesting raw, dataset-specific data and converting it to the canonical HDF5 format.
+   * **Adapters (`egohub/adapters`)**: Responsible *only* for ingesting raw, dataset-specific data and converting it to the canonical HDF5 format. Each adapter is organized in its own folder (e.g., `adapters/egodex/`) with a consistent structure.
    * **Processing Components (`egohub/processing`)**: Smaller, reusable components that perform a single task, like coordinate transforms or video decoding. Adapters use these components to build their data conversion pipeline.
-   * **Tools (`egohub/tools`)**: Post-processing modules that enrich an *existing* canonical HDF5 file with new data (e.g., running object detection). They are applied via a dedicated CLI script.
-2. **Configuration as Code**: All dataset-specific or environment-specific parameters (e.g., frame rates, camera intrinsics) are externalized into YAML files in the `configs/` directory. Each adapter automatically loads its corresponding config, eliminating hardcoded values and making it easy to add or modify dataset support.
+   * **Tools (`egohub/tasks` and `egohub/backends`)**: Post-processing modules that enrich an *existing* canonical HDF5 file with new data (e.g., running object detection). They are applied via a dedicated CLI script.
+2. **Configuration as Code**: All dataset-specific or environment-specific parameters (e.g., frame rates, camera intrinsics) are externalized into YAML files in the `configs/` directory. Each adapter automatically loads its corresponding config, eliminating hardcoded values and making it easy to add or modify dataset support. The configuration system supports both adapter-specific configs and project-wide configs.
 3. **Schema as the Single Source of Truth**: The structure of the canonical data is formally defined using Python dataclasses in `egohub/schema.py`. This provides a single, unambiguous source of truth for the HDF5 layout, which is used by adapters for writing and can be used for validation.
 
 ### What is Supported
