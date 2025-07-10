@@ -24,6 +24,9 @@ def generate_indices(
     if master_timestamps_ns.ndim != 1 or stream_timestamps_ns.ndim != 1:
         raise ValueError("Timestamp arrays must be 1-dimensional.")
 
+    if len(master_timestamps_ns) == 0:
+        raise ValueError("Master timestamps array cannot be empty.")
+
     # Reshape for use with cKDTree, which expects 2D arrays
     master_reshaped = master_timestamps_ns.reshape(-1, 1)
     stream_reshaped = stream_timestamps_ns.reshape(-1, 1)

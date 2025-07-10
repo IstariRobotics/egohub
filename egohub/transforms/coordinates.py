@@ -96,7 +96,8 @@ def arkit_to_canonical_poses(poses: np.ndarray) -> np.ndarray:
     Converts a batch of poses from ARKit's coordinate system to the canonical system.
 
     Args:
-        poses: A numpy array of shape (N, 4, 4) or (N, 68, 3) representing poses.
+        poses: A numpy array of shape (N, 4, 4), (N, K, 3), or (N, 3)
+               representing poses.
 
     Returns:
         A numpy array with the same shape, with poses in the canonical coordinate
@@ -116,6 +117,11 @@ def arkit_to_canonical_poses(poses: np.ndarray) -> np.ndarray:
         # Apply only the rotation part of the transform
         transformed_points = points @ transform_matrix[:3, :3].T
         return transformed_points.reshape(original_shape)
+
+    # Handle 2D positions (N, 3)
+    elif poses.ndim == 2 and poses.shape[-1] == 3:
+        # Apply only the rotation part of the transform
+        return poses @ transform_matrix[:3, :3].T
 
     # Handle single 4x4 matrix
     elif poses.ndim == 2 and poses.shape == (4, 4):
