@@ -61,9 +61,17 @@ class EgocentricH5Dataset(BaseDatasetReader):
         trajectories: Optional[List[str]] = None,
         camera_streams: Optional[List[str]] = None,
         transform: Optional[Callable] = None,
+        trajectory_filter: Optional[Callable] = None,
+        frame_filter: Optional[Callable] = None,
+        transforms: Optional[List[Callable]] = None,
+        skeleton_streams: Optional[List[str]] = None,
     ):
         self.h5_path = Path(h5_path)
         self.transform = transform
+        self.trajectory_filter = trajectory_filter
+        self.frame_filter = frame_filter
+        self.transforms = transforms or []
+        self.skeleton_streams = skeleton_streams
 
         if not self.h5_path.exists():
             raise FileNotFoundError(f"HDF5 file not found: {self.h5_path}")
@@ -73,10 +81,14 @@ class EgocentricH5Dataset(BaseDatasetReader):
         # Build global frame index
         self.frame_index = self._build_frame_index(trajectories)
 
+        # Calculate number of trajectories and frames
+        self.num_trajectories = len(set(idx[0] for idx in self.frame_index))
+        self.num_frames = len(self.frame_index)
+
         logging.info(
             f"Loaded EgocentricH5Dataset from {self.h5_path} with "
             f"{len(self.frame_index)} total frames across "
-            f"{len(set(idx[0] for idx in self.frame_index))} trajectories"
+            f"{self.num_trajectories} trajectories"
         )
 
     def _resolve_camera_streams(
@@ -297,11 +309,21 @@ class EgocentricH5Dataset(BaseDatasetReader):
                         )
         return objects_data
 
-    def __getitem__(self, idx: int) -> Dict[str, Union[str, int, torch.Tensor, Dict]]:
+    def __getitem__(
+        self, idx: Union[int, slice]
+    ) -> Dict[str, Union[str, int, torch.Tensor, Dict]]:
         """
-        Load a single frame from the dataset.
+        Load a single frame or slice of frames from the dataset.
         """
+        if isinstance(idx, slice):
+            # Handle slicing
+            start, stop, step = idx.indices(len(self))
+            indices = range(start, stop, step)
+            return [self[i] for i in indices]
+
         traj_name, frame_idx = self.frame_index[idx]
+        trajectory_names = sorted(set(idx[0] for idx in self.frame_index))
+        trajectory_idx = trajectory_names.index(traj_name)
 
         with h5py.File(self.h5_path, "r") as f:
             traj_group = f.get(traj_name)
@@ -311,7 +333,9 @@ class EgocentricH5Dataset(BaseDatasetReader):
 
             result: Dict[str, Union[str, int, torch.Tensor, Dict]] = {
                 "trajectory_name": traj_name,
+                "trajectory_idx": trajectory_idx,
                 "frame_index": frame_idx,
+                "frame_idx": frame_idx,  # Alias for compatibility
                 "global_index": idx,
             }
 
@@ -337,8 +361,12 @@ class EgocentricH5Dataset(BaseDatasetReader):
             if object_data:
                 result["objects"] = object_data
 
+            # Apply transforms
             if self.transform is not None:
                 result = self.transform(result)
+
+            for transform in self.transforms:
+                result = transform(result)
 
             return result
 
@@ -376,7 +404,53 @@ class EgocentricH5Dataset(BaseDatasetReader):
 
     def get_metadata(self) -> Dict[str, Dict]:
         """Alias for get_trajectory_info to satisfy the uniform API."""
-        return self.get_trajectory_info()
+        metadata = self.get_trajectory_info()
+        metadata["num_trajectories"] = self.num_trajectories
+        metadata["num_frames"] = self.num_frames
+        return metadata
+
+    def get_trajectory_data(self, trajectory_idx: int) -> Dict[str, torch.Tensor]:
+        """Get all data for a specific trajectory."""
+        if trajectory_idx >= self.num_trajectories:
+            raise IndexError(f"Trajectory index {trajectory_idx} out of range")
+
+        trajectory_names = sorted(set(idx[0] for idx in self.frame_index))
+        traj_name = trajectory_names[trajectory_idx]
+
+        # Get all frames for this trajectory
+        traj_frames = [
+            i for i, (name, _) in enumerate(self.frame_index) if name == traj_name
+        ]
+
+        trajectory_data = []
+        for frame_idx in traj_frames:
+            trajectory_data.append(self[frame_idx])
+
+        return trajectory_data
+
+    def get_frame_data(
+        self, trajectory_idx: int, frame_idx: int
+    ) -> Dict[str, torch.Tensor]:
+        """Get data for a specific frame in a specific trajectory."""
+        if trajectory_idx >= self.num_trajectories:
+            raise IndexError(f"Trajectory index {trajectory_idx} out of range")
+
+        trajectory_names = sorted(set(idx[0] for idx in self.frame_index))
+        traj_name = trajectory_names[trajectory_idx]
+
+        # Find the global index for this trajectory and frame
+        global_idx = None
+        for i, (name, frame) in enumerate(self.frame_index):
+            if name == traj_name and frame == frame_idx:
+                global_idx = i
+                break
+
+        if global_idx is None:
+            raise IndexError(
+                f"Frame {frame_idx} not found in trajectory {trajectory_idx}"
+            )
+
+        return self[global_idx]
 
 
 class LatentSequenceDataset(Dataset):

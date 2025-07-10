@@ -243,6 +243,13 @@ def _get_task_name_mapping(task, backend):
     return None
 
 
+def _get_task_output_group(task_class):
+    """Get the output group for a task class."""
+    if hasattr(task_class, "output_group"):
+        return task_class.output_group
+    return task_class.__name__.replace("Task", "").lower() + "/"
+
+
 def _handle_process_command(args):
     """Handle the process command."""
     logging.basicConfig(level=logging.INFO)
@@ -260,7 +267,7 @@ def _handle_process_command(args):
         backend_kwargs["task_name"] = task_name
 
     # Instantiate task and backend
-    output_group_name = task_class.__name__.replace("Task", "").lower()
+    output_group_name = _get_task_output_group(task_class)
     task_instance = task_class(output_group_name=output_group_name)
     try:
         backend_instance = backend_class(**backend_kwargs)
