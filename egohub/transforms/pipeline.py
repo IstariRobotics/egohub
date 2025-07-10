@@ -32,3 +32,12 @@ class TransformPipeline:
         for transform in self.transforms:
             data = transform(data)
         return data
+
+    def __repr__(self) -> str:
+        """
+        Returns a string representation of the pipeline.
+
+        Returns:
+            A string showing the class name and number of transforms.
+        """
+        return f"TransformPipeline({len(self.transforms)} transforms)"
