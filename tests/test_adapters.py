@@ -8,8 +8,15 @@ import numpy as np
 import pytest
 
 from egohub.adapters.base import BaseAdapter
-from egohub.adapters.egodex import EGODEX_TO_CANONICAL_SKELETON_MAP, EgoDexAdapter
-from egohub.constants import EGODEX_SKELETON_HIERARCHY, EGODEX_SKELETON_JOINTS
+from egohub.adapters.egodex.egodex import (
+    EGODEX_TO_CANONICAL_SKELETON_MAP,
+    EgoDexAdapter,
+)
+from egohub.constants import CANONICAL_SKELETON_JOINTS
+from egohub.constants.egodex_skeleton import (
+    EGODEX_SKELETON_HIERARCHY,
+    EGODEX_SKELETON_JOINTS,
+)
 
 
 class TestBaseAdapter:
@@ -241,8 +248,6 @@ class TestEgoDexAdapter:
             assert source_joint in EGODEX_SKELETON_JOINTS
 
         # Test that all values are valid canonical joint names
-        from egohub.constants import CANONICAL_SKELETON_JOINTS
-
         for canonical_joint in EGODEX_TO_CANONICAL_SKELETON_MAP.values():
             assert canonical_joint in CANONICAL_SKELETON_JOINTS
 
