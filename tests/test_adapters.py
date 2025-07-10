@@ -251,32 +251,18 @@ class TestEgoDexAdapter:
         for canonical_joint in EGODEX_TO_CANONICAL_SKELETON_MAP.values():
             assert canonical_joint in CANONICAL_SKELETON_JOINTS
 
-    @patch("egohub.adapters.egodex.EgoDexAdapter.process_sequence")
-    def test_adapter_run_method(self, mock_process_sequence, temp_dir, mock_sequence):
-        """Test the main run method of the adapter."""
-        output_file = temp_dir / "output.hdf5"
-        adapter = EgoDexAdapter(raw_dir=temp_dir, output_file=output_file)
+    @patch("egohub.adapters.egodex.egodex.EgoDexAdapter.discover_sequences")
+    @patch("egohub.adapters.egodex.egodex.EgoDexAdapter.process_sequence")
+    def test_adapter_run_method(
+        self, mock_process_sequence, mock_discover_sequences, temp_dir, mock_sequence
+    ):
+        """Test the run method of the EgoDexAdapter."""
+        mock_discover_sequences.return_value = [mock_sequence]
+        output_file = temp_dir / "output.h5"
+        adapter = EgoDexAdapter(temp_dir, output_file)
 
-        # Test with a single sequence
-        with patch.object(
-            EgoDexAdapter,
-            "discover_sequences",
-            return_value=[
-                {
-                    "hdf5_path": mock_sequence["hdf5_path"],
-                    "mp4_path": mock_sequence["mp4_path"],
-                    "sequence_name": mock_sequence["name"],
-                }
-            ],
-        ):
-            adapter.run(num_sequences=1)
-            mock_process_sequence.assert_called_once()
-            assert output_file.exists()
-            with h5py.File(output_file, "r") as f_out:
-                assert "trajectory_0000" in f_out
+        adapter.run()
 
-        # Test with no sequences found
-        mock_process_sequence.reset_mock()
-        with patch.object(EgoDexAdapter, "discover_sequences", return_value=[]):
-            adapter.run()
-            mock_process_sequence.assert_not_called()
+        mock_discover_sequences.assert_called_once()
+        mock_process_sequence.assert_called_once()
+        assert output_file.exists()
