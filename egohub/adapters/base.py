@@ -42,11 +42,27 @@ class BaseAdapter(ABC):
             )
             return {}
 
-        # Assuming the script is run from the project root
-        config_path = Path(f"configs/{self.name}.yaml")
-        if not config_path.exists():
+        # Get the directory of the current file (base.py)
+        base_dir = Path(__file__).parent.resolve()
+
+        # Path for config inside adapter's own folder
+        adapter_config_path = base_dir / self.name / f"{self.name}.yaml"
+
+        # Path for config in the project's root configs folder
+        # Assumes egohub/adapters/base.py -> egohub/configs/
+        root_config_path = base_dir.parent / "configs" / f"{self.name}.yaml"
+
+        config_path = None
+        if adapter_config_path.exists():
+            config_path = adapter_config_path
+        elif root_config_path.exists():
+            config_path = root_config_path
+        else:
             logging.warning(
-                f"No config file found for adapter '{self.name}' at {config_path}."
+                f"No config file found for adapter '{self.name}'.\n"
+                f"Searched paths:\n"
+                f"- {adapter_config_path}\n"
+                f"- {root_config_path}"
             )
             return {}
 
