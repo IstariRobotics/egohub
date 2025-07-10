@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 class PoseEstimationTask(BaseTask):
     def __init__(self, output_group_name: str = "skeleton"):
         super().__init__(output_group_name)
+        self.output_group = "skeleton/"
 
     def run(self, traj_group: h5py.Group, backend: BaseBackend, **kwargs):
         """
