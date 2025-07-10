@@ -19,12 +19,12 @@ class BaseBackend(ABC):
 
 
 def get_backend(backend_name: str) -> type[BaseBackend]:
-    """Retrieves a backend class by its name."""
+    """Retrieries a backend class by its name."""
     from egohub import backends
 
     backend_cls = getattr(backends, backend_name, None)
     if backend_cls is None:
         raise ValueError(f"Unknown backend: {backend_name}")
-    if not issubclass(backend_cls, BaseBackend):
+    if not isinstance(backend_cls, type) or not issubclass(backend_cls, BaseBackend):
         raise TypeError(f"{backend_name} is not a valid Backend class.")
     return backend_cls
