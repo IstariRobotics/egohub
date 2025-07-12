@@ -32,8 +32,7 @@ class RerunExporter:
         self.frame_stride = frame_stride
 
     def export(self, h5_path: Path, output_path: Optional[Path] = None):
-        """Exports the data from an HDF5 file to Rerun.
-        """
+        """Exports the data from an HDF5 file to Rerun."""
         if not h5_path.exists():
             logger.error(f"Input file not found: {h5_path}")
             return
@@ -208,9 +207,8 @@ class RerunExporter:
             pose_indices_dset = cam_group.get("pose_indices")
             if isinstance(pose_dset, h5py.Dataset):
                 pose_row = frame_idx
-                if (
-                    isinstance(pose_indices_dset, h5py.Dataset)
-                    and frame_idx < len(pose_indices_dset)
+                if isinstance(pose_indices_dset, h5py.Dataset) and frame_idx < len(
+                    pose_indices_dset
                 ):
                     pose_row = int(pose_indices_dset[frame_idx])
                 if pose_row < len(pose_dset):
