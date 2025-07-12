@@ -90,11 +90,9 @@ class RerunExporter:
             num_frames = min(num_frames, self.max_frames)
 
         logger.info(f"Visualizing {num_frames} frames for {traj_name}...")
-        for i, frame_idx in enumerate(
-            tqdm(
-                range(0, num_frames, self.frame_stride),
-                desc=f"Visualizing {traj_name}",
-            )
+        for frame_idx in tqdm(
+            range(0, num_frames, self.frame_stride),
+            desc=f"Visualizing {traj_name}",
         ):
             rr.set_time_sequence("frame_idx", frame_idx)
             self._log_temporal_camera_data(traj_group, cam_keys, frame_idx)
@@ -152,7 +150,7 @@ class RerunExporter:
                     and isinstance(image_bytes, h5py.Dataset)
                     and len(frame_sizes) > 0
                 ):
-                    num_bytes = frame_sizes[0]
+                    _ = frame_sizes[0]  # num_bytes unused; keep for length validation
                     encoded_frame = image_bytes[0]
                     image = Image.open(io.BytesIO(encoded_frame))
                     width, height = image.size
@@ -210,7 +208,10 @@ class RerunExporter:
             pose_indices_dset = cam_group.get("pose_indices")
             if isinstance(pose_dset, h5py.Dataset):
                 pose_row = frame_idx
-                if isinstance(pose_indices_dset, h5py.Dataset) and frame_idx < len(pose_indices_dset):
+                if (
+                    isinstance(pose_indices_dset, h5py.Dataset)
+                    and frame_idx < len(pose_indices_dset)
+                ):
                     pose_row = int(pose_indices_dset[frame_idx])
                 if pose_row < len(pose_dset):
                     pose = pose_dset[pose_row]
@@ -232,12 +233,13 @@ class RerunExporter:
                     frame_indices = frame_indices_dset[:]
                     current_indices = np.where(frame_indices == frame_idx)[0]
                     for idx in current_indices:
-                        num_bytes = frame_sizes[idx]
+                        _ = frame_sizes[idx]  # num_bytes unused; keep for validation
                         encoded_frame = image_bytes[idx]
 
                         image = Image.open(io.BytesIO(encoded_frame))
                         image_np = np.array(image)
-                        # Rotate if image appears in portrait orientation while intrinsics expect landscape
+                        # Rotate if image appears in portrait orientation while
+                        # intrinsics expect landscape
                         if image_np.shape[0] > image_np.shape[1]:
                             image_np = np.rot90(image_np, k=3)  # rotate 90° CCW
 
