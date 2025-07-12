@@ -8,6 +8,7 @@ import numpy as np
 import rerun as rr
 import rerun.blueprint as rrb
 from PIL import Image
+from tqdm import tqdm
 
 from egohub.constants import (
     CANONICAL_SKELETON_HIERARCHY,
@@ -18,13 +19,21 @@ logger = logging.getLogger(__name__)
 
 
 class RerunExporter:
-    """Exports egocentric data directly from an HDF5 file to Rerun."""
+    """A class to export EgoHub data to Rerun for visualization."""
 
-    def __init__(self, max_frames: Optional[int] = None):
+    def __init__(self, max_frames: Optional[int] = None, frame_stride: int = 1):
+        """
+        Initializes the RerunExporter.
+        Args:
+            max_frames (Optional[int]): The maximum number of frames to process.
+            frame_stride (int): The stride to use when iterating through frames.
+        """
         self.max_frames = max_frames
+        self.frame_stride = frame_stride
 
     def export(self, h5_path: Path, output_path: Optional[Path] = None):
-        """Visualize HDF5 data using Rerun by reading the file directly."""
+        """Exports the data from an HDF5 file to Rerun.
+        """
         if not h5_path.exists():
             logger.error(f"Input file not found: {h5_path}")
             return
@@ -63,7 +72,7 @@ class RerunExporter:
 
         blueprint = self._create_blueprint(cam_keys)
         rr.send_blueprint(blueprint)
-        rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
+        rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Y_UP, static=True)
 
         self._log_static_metadata(traj_group)
         self._log_static_camera_data(traj_group, cam_keys)
@@ -77,17 +86,20 @@ class RerunExporter:
         master_timestamps_ns = timestamps_dset[:]
         num_frames = len(master_timestamps_ns)
 
-        if self.max_frames:
+        if self.max_frames is not None:
             num_frames = min(num_frames, self.max_frames)
 
         logger.info(f"Visualizing {num_frames} frames for {traj_name}...")
-        for i in range(num_frames):
-            timestamp_ns = master_timestamps_ns[i]
-            rr.set_time_sequence("frame", i)
-            rr.set_time_nanos("timestamp", timestamp_ns)
-            self._log_temporal_camera_data(traj_group, cam_keys, i)
-            self._log_temporal_object_data(traj_group, cam_keys, i)
-            self._log_temporal_skeleton_data(traj_group, i)
+        for i, frame_idx in enumerate(
+            tqdm(
+                range(0, num_frames, self.frame_stride),
+                desc=f"Visualizing {traj_name}",
+            )
+        ):
+            rr.set_time_sequence("frame_idx", frame_idx)
+            self._log_temporal_camera_data(traj_group, cam_keys, frame_idx)
+            self._log_temporal_object_data(traj_group, cam_keys, frame_idx)
+            self._log_temporal_skeleton_data(traj_group, frame_idx)
 
     def _create_blueprint(self, camera_names: List[str]) -> rrb.Blueprint:
         spatial2d_views = [
@@ -126,32 +138,37 @@ class RerunExporter:
 
             img_path = f"world/cameras/{cam_key}/image"
             intr_dset = cam_group.get("intrinsics")
-            rgb_grp = cam_group.get("rgb")
+            if not isinstance(intr_dset, h5py.Dataset):
+                continue
 
-            if isinstance(intr_dset, h5py.Dataset) and isinstance(rgb_grp, h5py.Group):
-                intr = intr_dset[:]
+            intr = intr_dset[:]
+            width, height = 1920, 1080  # Default resolution
+            rgb_grp = cam_group.get("rgb")
+            if isinstance(rgb_grp, h5py.Group):
                 frame_sizes = rgb_grp.get("frame_sizes")
                 image_bytes = rgb_grp.get("image_bytes")
-
                 if (
                     isinstance(frame_sizes, h5py.Dataset)
                     and isinstance(image_bytes, h5py.Dataset)
                     and len(frame_sizes) > 0
                 ):
                     num_bytes = frame_sizes[0]
-                    encoded_frame = image_bytes[0, :num_bytes]
+                    encoded_frame = image_bytes[0]
                     image = Image.open(io.BytesIO(encoded_frame))
                     width, height = image.size
-                    rr.log(
-                        img_path,
-                        rr.Pinhole(
-                            image_from_camera=intr,
-                            width=width,
-                            height=height,
-                            camera_xyz=rr.ViewCoordinates.RDF,
-                        ),
-                        static=True,
-                    )
+                    if height > width:
+                        width, height = height, width  # swap if portrait
+
+            rr.log(
+                img_path,
+                rr.Pinhole(
+                    image_from_camera=intr,
+                    width=width,
+                    height=height,
+                    camera_xyz=rr.ViewCoordinates.RDF,
+                ),
+                static=True,
+            )
 
     def _set_pose_annotation_context(self) -> None:
         keypoint_connections = []
@@ -191,13 +208,12 @@ class RerunExporter:
 
             pose_dset = cam_group.get("pose_in_world")
             pose_indices_dset = cam_group.get("pose_indices")
-            if isinstance(pose_dset, h5py.Dataset) and isinstance(
-                pose_indices_dset, h5py.Dataset
-            ):
-                pose_indices = pose_indices_dset[:]
-                current_indices = np.where(pose_indices == frame_idx)[0]
-                for idx in current_indices:
-                    pose = pose_dset[idx]
+            if isinstance(pose_dset, h5py.Dataset):
+                pose_row = frame_idx
+                if isinstance(pose_indices_dset, h5py.Dataset) and frame_idx < len(pose_indices_dset):
+                    pose_row = int(pose_indices_dset[frame_idx])
+                if pose_row < len(pose_dset):
+                    pose = pose_dset[pose_row]
                     rr.log(
                         f"world/cameras/{cam_key}",
                         rr.Transform3D(translation=pose[:3, 3], mat3x3=pose[:3, :3]),
@@ -217,10 +233,13 @@ class RerunExporter:
                     current_indices = np.where(frame_indices == frame_idx)[0]
                     for idx in current_indices:
                         num_bytes = frame_sizes[idx]
-                        encoded_frame = image_bytes[idx, :num_bytes]
+                        encoded_frame = image_bytes[idx]
 
                         image = Image.open(io.BytesIO(encoded_frame))
                         image_np = np.array(image)
+                        # Rotate if image appears in portrait orientation while intrinsics expect landscape
+                        if image_np.shape[0] > image_np.shape[1]:
+                            image_np = np.rot90(image_np, k=3)  # rotate 90° CCW
 
                         rr.log(f"world/cameras/{cam_key}/image", rr.Image(image_np))
 
@@ -264,32 +283,25 @@ class RerunExporter:
 
         pos_dset = skeleton_group.get("positions")
         conf_dset = skeleton_group.get("confidences")
-        frame_indices_dset = skeleton_group.get("frame_indices")
-        if (
-            isinstance(pos_dset, h5py.Dataset)
-            and isinstance(conf_dset, h5py.Dataset)
-            and isinstance(frame_indices_dset, h5py.Dataset)
-        ):
-            frame_indices = frame_indices_dset[:]
-            current_indices = np.where(frame_indices == frame_idx)[0]
 
-            for idx in current_indices:
-                positions = pos_dset[idx]
-                confidences = conf_dset[idx]
+        if isinstance(pos_dset, h5py.Dataset) and isinstance(conf_dset, h5py.Dataset):
+            if frame_idx < len(pos_dset):
+                positions = pos_dset[frame_idx]
+                confidences = conf_dset[frame_idx]
                 colors = self._confidence_scores_to_rgb(confidences)
 
                 rr.log(
                     "world/skeleton",
                     rr.Points3D(
                         positions=positions,
-                        colors=colors,
-                        radii=0.01,
                         class_ids=0,
-                        keypoint_ids=list(range(len(CANONICAL_SKELETON_JOINTS))),
+                        keypoint_ids=np.arange(len(positions)),
+                        colors=colors,
                     ),
                 )
 
     def _confidence_scores_to_rgb(self, confidence_scores: np.ndarray) -> np.ndarray:
+        """Converts confidence scores (0-1) to RGB colors for visualization."""
         n_kpts = confidence_scores.shape[0]
         clipped_confidences = np.clip(confidence_scores, a_min=0.0, a_max=1.0)
         colors = np.zeros((n_kpts, 3), dtype=np.uint8)
