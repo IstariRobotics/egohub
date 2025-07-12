@@ -9,8 +9,6 @@ from egohub.adapters.base import BaseAdapter
 from egohub.constants import EGODEX_SKELETON_HIERARCHY, EGODEX_SKELETON_JOINTS
 from egohub.processing.skeleton import remap_skeleton
 from egohub.processing.synchronization import generate_indices
-from egohub.transforms import TransformPipeline
-from egohub.transforms.coordinates import arkit_to_canonical_poses
 
 # Defines the mapping from the EgoDex source skeleton to the canonical skeleton.
 # This is necessary because the joint names and structure differ.
@@ -202,13 +200,7 @@ class EgoDexAdapter(BaseAdapter):
         if isinstance(camera_transforms_data, h5py.Dataset):
             raw_camera_poses = camera_transforms_data[:]
 
-            # Define a pipeline for pose transformation
-            pose_pipeline = TransformPipeline([arkit_to_canonical_poses])
-            canonical_camera_poses = pose_pipeline(raw_camera_poses)
-
-            ego_camera_group.create_dataset(
-                "pose_in_world", data=canonical_camera_poses
-            )
+            ego_camera_group.create_dataset("pose_in_world", data=raw_camera_poses)
             found_streams.add("cameras/ego_camera/pose_in_world")
 
             # Generate and save pose indices
@@ -290,11 +282,7 @@ class EgoDexAdapter(BaseAdapter):
             if isinstance(hand_transforms, h5py.Dataset):
                 raw_hand_poses = hand_transforms[:]
 
-                # Reuse the same pipeline
-                pose_pipeline = TransformPipeline([arkit_to_canonical_poses])
-                canonical_hand_poses = pose_pipeline(raw_hand_poses)
-
-                hand_group.create_dataset("pose_in_world", data=canonical_hand_poses)
+                hand_group.create_dataset("pose_in_world", data=raw_hand_poses)
                 found_streams.add(f"hands/{hand}/pose_in_world")
 
                 # Generate and save pose indices
@@ -352,13 +340,9 @@ class EgoDexAdapter(BaseAdapter):
                     source_positions = np.stack(positions_list, axis=1)
                     all_confidences = np.stack(confidences_list, axis=1)
 
-                    # 1. Transform coordinates from ARKit to our canonical system
-                    pose_pipeline = TransformPipeline([arkit_to_canonical_poses])
-                    source_positions_canonical_coords = pose_pipeline(source_positions)
-
-                    # 2. Remap the skeleton to the canonical joint definition
+                    # Remap the skeleton to the canonical joint definition
                     canonical_positions, canonical_confidences = remap_skeleton(
-                        source_positions=source_positions_canonical_coords,
+                        source_positions=source_positions,
                         source_confidences=all_confidences,
                         source_joint_names=self.source_joint_names,
                         joint_map=EGODEX_TO_CANONICAL_SKELETON_MAP,
