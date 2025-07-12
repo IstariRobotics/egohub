@@ -200,9 +200,7 @@ class EgoDexAdapter(BaseAdapter):
         if isinstance(camera_transforms_data, h5py.Dataset):
             raw_camera_poses = camera_transforms_data[:]
 
-            ego_camera_group.create_dataset(
-                "pose_in_world", data=raw_camera_poses
-            )
+            ego_camera_group.create_dataset("pose_in_world", data=raw_camera_poses)
             found_streams.add("cameras/ego_camera/pose_in_world")
 
             # Generate and save pose indices
