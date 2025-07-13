@@ -14,7 +14,7 @@ EgoHub provides an end-to-end pipeline for ingesting, normalizing, and serving e
 **Core Features**
 
 - **Video Processing**: Multi-camera video ingestion, synchronization, and frame extraction
-- **Skeleton Tracking**: Full-body pose estimation with canonical 22-joint SMPL-X format
+- **Skeleton Tracking**: Full-body pose estimation using a canonical Mediapipe skeleton (33 body landmarks + 21 hand landmarks per hand, plus a virtual pelvis root)
 - **Camera Calibration**: Intrinsic and extrinsic parameter handling with coordinate transformations
 - **Data Export/Visualization**: Interactive 3D visualization with Rerun and flexible export formats
 - **Multiple Data Formats**: Support for various input formats with extensible adapter architecture
@@ -176,27 +176,48 @@ To add support for a new dataset:
 Example:
 ```python
 from egohub.adapters.base import BaseAdapter
+from egohub.adapters.dataset_info import DatasetInfo
 
 class MyAdapter(BaseAdapter):
     name = "my_adapter"
-    
+
+    # ------------------------------------------------------------------
+    # Required skeletal metadata
+    # ------------------------------------------------------------------
+
     @property
     def source_joint_names(self) -> List[str]:
         # Return list of joint names for your dataset
-        pass
-    
+        ...
+
     @property
     def source_skeleton_hierarchy(self) -> Dict[str, str]:
         # Return skeleton hierarchy for your dataset
-        pass
-    
+        ...
+
+    # ------------------------------------------------------------------
+    # New unified metadata interface (required)
+    # ------------------------------------------------------------------
+
+    def get_camera_intrinsics(self) -> Dict[str, Any]:
+        # Return camera intrinsics as a 3×3 matrix or a dict containing one
+        ...
+
+    def get_dataset_info(self) -> DatasetInfo:
+        # Provide dataset-wide metadata (frame-rate, joint remaps, etc.)
+        ...
+
+    # ------------------------------------------------------------------
+    # Sequence discovery & processing
+    # ------------------------------------------------------------------
+
     def discover_sequences(self) -> List[Dict[str, Any]]:
         # Discover sequences in raw data
-        pass
-    
+        ...
+
     def process_sequence(self, seq_info: Dict[str, Any], traj_group: h5py.Group):
         # Process a single sequence
-        pass
+        ...
 ```
 
 ## Quick Start
@@ -400,7 +421,7 @@ Each HDF5 file can contain multiple trajectories, identified as `trajectory_{:04
 | **`metadata/`**              | `metadata: Metadata` | Contains high-level information like`uuid`, `source_dataset`, and a synchronized master `timestamps_ns` dataset.                                                                                                                                                      |
 | **`cameras/{camera_name}/`** | `cameras: Dict`      | A group for each camera, where`{camera_name}` is a unique identifier (e.g., `ego_camera`). Contains `pose_in_world`, `intrinsics`, and `rgb` data.                                                                                                                    |
 | **`hands/{left,right}/`**    | `hands: Dict`        | Contains data related to hand tracking, such as`pose_in_world` and `pose_indices`.                                                                                                                                                                                    |
-| **`skeleton/`** (optional)   | `skeleton: Skeleton` | Stores full-body skeleton tracking data. The skeleton structure is fixed to a canonical 22-joint definition based on SMPL-X (see`egohub/constants.py`), ensuring consistency across all datasets. The group contains `positions`, `confidences`, and `frame_indices`. |
+| **`skeleton/`** (optional)   | `skeleton: Skeleton` | Stores full-body skeleton tracking data. The skeleton structure is fixed to a canonical Mediapipe definition (33 pose landmarks, 21 hand landmarks per hand, plus a virtual pelvis root; see `egohub/constants/canonical_skeleton.py`), ensuring consistency across all datasets. The group contains `positions`, `confidences`, and `frame_indices`. |
 
 **Note on Extensibility and Temporal Indices:** The base schema is intentionally minimal. Additional data can be added by enrichment **Tools**.
 
