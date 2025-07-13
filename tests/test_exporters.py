@@ -1,6 +1,3 @@
-
-
-
 # @pytest.fixture
 # def dummy_hdf5(tmp_path):
 #     # Use CLI to generate dummy file in test

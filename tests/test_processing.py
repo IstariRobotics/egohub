@@ -156,7 +156,7 @@ class TestRemapSkeleton:
         joint_map = {
             "hip": "pelvis",
             "left_shoulder": "left_shoulder",
-            "left_elbow": "left_elbow"
+            "left_elbow": "left_elbow",
         }
 
         canonical_positions, canonical_confidences = remap_skeleton(
