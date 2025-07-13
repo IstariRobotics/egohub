@@ -104,7 +104,6 @@ class EgoDexAdapter(BaseAdapter):
                 )
             }
 
-
     def get_dataset_info(self) -> DatasetInfo:  # noqa: D401
         intr_dict = self.get_camera_intrinsics()
         intr: np.ndarray
