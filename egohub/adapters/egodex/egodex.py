@@ -154,6 +154,9 @@ class EgoDexAdapter(BaseAdapter):
         logging.info(f"Found {len(sequences)} sequences.")
         return sequences
 
+    def _load_config(self) -> dict:
+        return {}
+
     def _process_metadata(
         self, seq_info: dict, f_in: h5py.File, traj_group: h5py.Group
     ) -> tuple[set, np.ndarray]:
