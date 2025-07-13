@@ -76,10 +76,10 @@ class TestEgoDexAdapter:
 
             # Add hand transforms
             transforms_group.create_dataset(
-                "LeftHand", data=np.random.rand(10, 4, 4).astype(np.float32)
+                "leftHand", data=np.random.rand(10, 4, 4).astype(np.float32)
             )
             transforms_group.create_dataset(
-                "RightHand", data=np.random.rand(10, 4, 4).astype(np.float32)
+                "rightHand", data=np.random.rand(10, 4, 4).astype(np.float32)
             )
 
             # Add skeleton transforms and confidences

@@ -44,13 +44,6 @@ class TestCLIDiscovery:
                 result = discover_classes(mock_module, Mock, "name")
                 assert isinstance(result, dict)
 
-    def test_discover_adapters(self):
-        """Test discover_adapters function."""
-        adapters = discover_adapters()
-        assert isinstance(adapters, dict)
-        # Should find at least the EgoDexAdapter
-        assert "egodex" in adapters
-
     def test_discover_backends(self):
         """Test discover_backends function."""
         backends = discover_backends()

@@ -12,7 +12,6 @@ import egohub.adapters
 import egohub.backends
 import egohub.tasks
 from egohub.adapters.base import BaseAdapter
-from egohub.adapters.dummy_multi_view.dummy_multi_view import DummyMultiViewAdapter
 from egohub.adapters.egodex.egodex import EgoDexAdapter
 from egohub.backends.base import BaseBackend
 from egohub.exporters.rerun_exporter import RerunExporter
@@ -68,7 +67,6 @@ def discover_tasks() -> dict[str, type[BaseTask]]:
 # Registry maps for dynamically discovered classes
 ADAPTER_MAP = {
     "egodex": EgoDexAdapter,
-    "dummy_multi_view": DummyMultiViewAdapter,
 }
 BACKEND_MAP = discover_backends()
 TASK_MAP = discover_tasks()
