@@ -41,25 +41,57 @@ To add a new dataset adapter:
 Example:
 ```python
 from egohub.adapters.base import BaseAdapter
+from egohub.adapters.dataset_info import DatasetInfo
 
 class MyAdapter(BaseAdapter):
     name = "my_adapter"
-    
+
+    # ------------------------------------------------------------------
+    # Required skeletal metadata
+    # ------------------------------------------------------------------
+
     @property
     def source_joint_names(self) -> List[str]:
         # Return list of joint names for your dataset
-        pass
-    
+        ...
+
     @property
     def source_skeleton_hierarchy(self) -> Dict[str, str]:
         # Return skeleton hierarchy for your dataset
-        pass
-    
+        ...
+
+    # ------------------------------------------------------------------
+    # New unified metadata interface (required)
+    # ------------------------------------------------------------------
+
+    def get_camera_intrinsics(self) -> Dict[str, Any]:
+        # Return camera intrinsics as a 3×3 matrix or a dict containing one
+        ...
+
+    def get_dataset_info(self) -> DatasetInfo:
+        # Provide dataset-wide metadata (frame-rate, joint remaps, etc.)
+        ...
+
+    # ------------------------------------------------------------------
+    # Sequence discovery & processing
+    # ------------------------------------------------------------------
+
     def discover_sequences(self) -> List[Dict[str, Any]]:
         # Discover sequences in raw data
-        pass
-    
+        ...
+
     def process_sequence(self, seq_info: Dict[str, Any], traj_group: h5py.Group):
         # Process a single sequence
-        pass
-``` 
+        ...
+```
+
+### Skeleton Remapping
+
+Adapters **must** remap their source skeleton joints to the project-wide canonical
+Mediapipe skeleton (33 pose landmarks + 21 hand landmarks per hand, plus a
+virtual `pelvis` root).  The canonical joint list and hierarchy live in
+`egohub/constants/canonical_skeleton.py`.  Your adapter should expose a
+`joint_remap` dict in `DatasetInfo` (see `EgoDexAdapter` for an example) that
+maps each *source* joint name to its corresponding canonical joint.
+
+Failing to provide a complete remap will raise an error during processing. 

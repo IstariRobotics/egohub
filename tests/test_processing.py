@@ -19,7 +19,7 @@ class TestSkeletonProcessor:
 
         # Mock transforms group
         transforms_group = Mock()
-        transforms_group.__class__ = h5py.Group
+        transforms_group.__class__ = h5py.Group  # type: ignore[attr-defined]
         transforms_group.keys.return_value = [
             "hip",
             "spine1",
@@ -57,7 +57,7 @@ class TestSkeletonProcessor:
 
         # Mock confidences group
         confidences_group = Mock()
-        confidences_group.__class__ = h5py.Group
+        confidences_group.__class__ = h5py.Group  # type: ignore[attr-defined]
 
         # Mock datasets for confidences
         hip_conf_dataset = Mock()
@@ -145,7 +145,7 @@ class TestRemapSkeleton:
         source_confidences = np.random.rand(num_frames, num_source_joints).astype(
             np.float32
         )
-        source_joint_names = ["hip", "spine1", "neck"]
+        source_joint_names = ["hip", "left_shoulder", "left_elbow"]
 
         return source_positions, source_confidences, source_joint_names
 
@@ -153,7 +153,11 @@ class TestRemapSkeleton:
         """Test remap_skeleton with a joint mapping."""
         source_positions, source_confidences, source_joint_names = sample_skeleton_data
 
-        joint_map = {"hip": "pelvis", "spine1": "spine1", "neck": "neck"}
+        joint_map = {
+            "hip": "pelvis",
+            "left_shoulder": "left_shoulder",
+            "left_elbow": "left_elbow"
+        }
 
         canonical_positions, canonical_confidences = remap_skeleton(
             source_positions, source_confidences, source_joint_names, joint_map
@@ -164,17 +168,17 @@ class TestRemapSkeleton:
 
         # Check that mapped joints have data
         pelvis_idx = CANONICAL_SKELETON_JOINTS.index("pelvis")
-        spine1_idx = CANONICAL_SKELETON_JOINTS.index("spine1")
-        neck_idx = CANONICAL_SKELETON_JOINTS.index("neck")
+        shoulder_idx = CANONICAL_SKELETON_JOINTS.index("left_shoulder")
+        elbow_idx = CANONICAL_SKELETON_JOINTS.index("left_elbow")
 
-        assert not np.isnan(canonical_positions[:, pelvis_idx, :]).all()
-        assert not np.isnan(canonical_positions[:, spine1_idx, :]).all()
-        assert not np.isnan(canonical_positions[:, neck_idx, :]).all()
+        assert np.all(~np.isnan(canonical_positions[:, pelvis_idx, :]))
+        assert np.all(~np.isnan(canonical_positions[:, shoulder_idx, :]))
+        assert np.all(~np.isnan(canonical_positions[:, elbow_idx, :]))
 
         # Check that unmapped joints have NaN positions and zero confidences
-        unmapped_idx = CANONICAL_SKELETON_JOINTS.index("left_shoulder")
-        assert np.isnan(canonical_positions[:, unmapped_idx, :]).all()
-        assert (canonical_confidences[:, unmapped_idx] == 0).all()
+        unmapped_idx = CANONICAL_SKELETON_JOINTS.index("right_shoulder")
+        assert np.all(np.isnan(canonical_positions[:, unmapped_idx, :]))
+        assert np.all(canonical_confidences[:, unmapped_idx] == 0)
 
     def test_remap_skeleton_without_joint_map(self, sample_skeleton_data):
         """Test remap_skeleton without a joint mapping."""
@@ -188,11 +192,11 @@ class TestRemapSkeleton:
         assert canonical_confidences.shape == (5, len(CANONICAL_SKELETON_JOINTS))
 
         # Check that matching joints have data
-        spine1_idx = CANONICAL_SKELETON_JOINTS.index("spine1")
-        neck_idx = CANONICAL_SKELETON_JOINTS.index("neck")
+        shoulder_idx = CANONICAL_SKELETON_JOINTS.index("left_shoulder")
+        elbow_idx = CANONICAL_SKELETON_JOINTS.index("left_elbow")
 
-        assert not np.isnan(canonical_positions[:, spine1_idx, :]).all()
-        assert not np.isnan(canonical_positions[:, neck_idx, :]).all()
+        assert not np.isnan(canonical_positions[:, shoulder_idx, :]).all()
+        assert not np.isnan(canonical_positions[:, elbow_idx, :]).all()
 
     def test_remap_skeleton_empty_input(self):
         """Test remap_skeleton with empty input."""
@@ -214,8 +218,8 @@ class TestRemapSkeleton:
         # Only map some joints
         joint_map = {
             "hip": "pelvis",
-            "spine1": "spine1",
-            # "neck" not mapped
+            "left_shoulder": "left_shoulder",
+            # "left_elbow" not mapped
         }
 
         canonical_positions, canonical_confidences = remap_skeleton(
@@ -224,14 +228,14 @@ class TestRemapSkeleton:
 
         # Check that mapped joints have data
         pelvis_idx = CANONICAL_SKELETON_JOINTS.index("pelvis")
-        spine1_idx = CANONICAL_SKELETON_JOINTS.index("spine1")
+        shoulder_idx = CANONICAL_SKELETON_JOINTS.index("left_shoulder")
 
         assert not np.isnan(canonical_positions[:, pelvis_idx, :]).all()
-        assert not np.isnan(canonical_positions[:, spine1_idx, :]).all()
+        assert not np.isnan(canonical_positions[:, shoulder_idx, :]).all()
 
-        # Check that unmapped joints (including neck) have NaN positions
-        neck_idx = CANONICAL_SKELETON_JOINTS.index("neck")
-        assert np.isnan(canonical_positions[:, neck_idx, :]).all()
+        # Check that unmapped joints (including left_elbow) have NaN positions
+        elbow_idx = CANONICAL_SKELETON_JOINTS.index("left_elbow")
+        assert np.isnan(canonical_positions[:, elbow_idx, :]).all()
 
 
 class TestSynchronization:

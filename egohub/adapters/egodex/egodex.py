@@ -17,71 +17,64 @@ from egohub.processing.synchronization import generate_indices
 EGODEX_TO_CANONICAL_SKELETON_MAP = {
     # Body
     "hip": "pelvis",
-    "spine1": "spine1",
-    "spine2": "spine2",
-    "spine3": "spine3",
-    "neck1": "neck",
-    "neck4": "head",
-    # Left Arm
     "leftShoulder": "left_shoulder",
     "leftArm": "left_elbow",
     "leftForearm": "left_wrist",  # EgoDex `leftForearm` is closer to the wrist
     "leftHand": "left_wrist",
-    # Right Arm
     "rightShoulder": "right_shoulder",
     "rightArm": "right_elbow",
     "rightForearm": "right_wrist",  # EgoDex `rightForearm` is closer to the wrist
     "rightHand": "right_wrist",
     # Left Hand Fingers
-    "leftIndexFingerMetacarpal": "left_hand_index_metacarpal",
-    "leftIndexFingerKnuckle": "left_hand_index_knuckle",
-    "leftIndexFingerIntermediateBase": "left_hand_index_intermediate_base",
-    "leftIndexFingerIntermediateTip": "left_hand_index_intermediate_tip",
-    "leftIndexFingerTip": "left_hand_index_tip",
-    "leftLittleFingerMetacarpal": "left_hand_little_finger_metacarpal",
-    "leftLittleFingerKnuckle": "left_hand_little_finger_knuckle",
-    "leftLittleFingerIntermediateBase": "left_hand_little_finger_intermediate_base",
-    "leftLittleFingerIntermediateTip": "left_hand_little_finger_intermediate_tip",
-    "leftLittleFingerTip": "left_hand_little_finger_tip",
-    "leftMiddleFingerMetacarpal": "left_hand_middle_finger_metacarpal",
-    "leftMiddleFingerKnuckle": "left_hand_middle_finger_knuckle",
-    "leftMiddleFingerIntermediateBase": "left_hand_middle_finger_intermediate_base",
-    "leftMiddleFingerIntermediateTip": "left_hand_middle_finger_intermediate_tip",
-    "leftMiddleFingerTip": "left_hand_middle_finger_tip",
-    "leftRingFingerMetacarpal": "left_hand_ring_finger_metacarpal",
-    "leftRingFingerKnuckle": "left_hand_ring_finger_knuckle",
-    "leftRingFingerIntermediateBase": "left_hand_ring_finger_intermediate_base",
-    "leftRingFingerIntermediateTip": "left_hand_ring_finger_intermediate_tip",
-    "leftRingFingerTip": "left_hand_ring_finger_tip",
-    "leftThumbKnuckle": "left_hand_thumb_knuckle",
-    "leftThumbIntermediateBase": "left_hand_thumb_intermediate_base",
-    "leftThumbIntermediateTip": "left_hand_thumb_intermediate_tip",
-    "leftThumbTip": "left_hand_thumb_tip",
+    "leftIndexFingerMetacarpal": "left_index_finger_mcp",
+    "leftIndexFingerKnuckle": "left_index_finger_pip",
+    "leftIndexFingerIntermediateBase": "left_index_finger_dip",
+    "leftIndexFingerIntermediateTip": "left_index_finger_dip",
+    "leftIndexFingerTip": "left_index_finger_tip",
+    "leftLittleFingerMetacarpal": "left_pinky_mcp",
+    "leftLittleFingerKnuckle": "left_pinky_pip",
+    "leftLittleFingerIntermediateBase": "left_pinky_dip",
+    "leftLittleFingerIntermediateTip": "left_pinky_dip",
+    "leftLittleFingerTip": "left_pinky_tip",
+    "leftMiddleFingerMetacarpal": "left_middle_finger_mcp",
+    "leftMiddleFingerKnuckle": "left_middle_finger_pip",
+    "leftMiddleFingerIntermediateBase": "left_middle_finger_dip",
+    "leftMiddleFingerIntermediateTip": "left_middle_finger_dip",
+    "leftMiddleFingerTip": "left_middle_finger_tip",
+    "leftRingFingerMetacarpal": "left_ring_finger_mcp",
+    "leftRingFingerKnuckle": "left_ring_finger_pip",
+    "leftRingFingerIntermediateBase": "left_ring_finger_dip",
+    "leftRingFingerIntermediateTip": "left_ring_finger_dip",
+    "leftRingFingerTip": "left_ring_finger_tip",
+    "leftThumbKnuckle": "left_thumb_cmc",
+    "leftThumbIntermediateBase": "left_thumb_mcp",
+    "leftThumbIntermediateTip": "left_thumb_ip",
+    "leftThumbTip": "left_thumb_tip",
     # Right Hand Fingers
-    "rightIndexFingerMetacarpal": "right_hand_index_metacarpal",
-    "rightIndexFingerKnuckle": "right_hand_index_knuckle",
-    "rightIndexFingerIntermediateBase": "right_hand_index_intermediate_base",
-    "rightIndexFingerIntermediateTip": "right_hand_index_intermediate_tip",
-    "rightIndexFingerTip": "right_hand_index_tip",
-    "rightLittleFingerMetacarpal": "right_hand_little_finger_metacarpal",
-    "rightLittleFingerKnuckle": "right_hand_little_finger_knuckle",
-    "rightLittleFingerIntermediateBase": "right_hand_little_finger_intermediate_base",
-    "rightLittleFingerIntermediateTip": "right_hand_little_finger_intermediate_tip",
-    "rightLittleFingerTip": "right_hand_little_finger_tip",
-    "rightMiddleFingerMetacarpal": "right_hand_middle_finger_metacarpal",
-    "rightMiddleFingerKnuckle": "right_hand_middle_finger_knuckle",
-    "rightMiddleFingerIntermediateBase": "right_hand_middle_finger_intermediate_base",
-    "rightMiddleFingerIntermediateTip": "right_hand_middle_finger_intermediate_tip",
-    "rightMiddleFingerTip": "right_hand_middle_finger_tip",
-    "rightRingFingerMetacarpal": "right_hand_ring_finger_metacarpal",
-    "rightRingFingerKnuckle": "right_hand_ring_finger_knuckle",
-    "rightRingFingerIntermediateBase": "right_hand_ring_finger_intermediate_base",
-    "rightRingFingerIntermediateTip": "right_hand_ring_finger_intermediate_tip",
-    "rightRingFingerTip": "right_hand_ring_finger_tip",
-    "rightThumbKnuckle": "right_hand_thumb_knuckle",
-    "rightThumbIntermediateBase": "right_hand_thumb_intermediate_base",
-    "rightThumbIntermediateTip": "right_hand_thumb_intermediate_tip",
-    "rightThumbTip": "right_hand_thumb_tip",
+    "rightIndexFingerMetacarpal": "right_index_finger_mcp",
+    "rightIndexFingerKnuckle": "right_index_finger_pip",
+    "rightIndexFingerIntermediateBase": "right_index_finger_dip",
+    "rightIndexFingerIntermediateTip": "right_index_finger_dip",
+    "rightIndexFingerTip": "right_index_finger_tip",
+    "rightLittleFingerMetacarpal": "right_pinky_mcp",
+    "rightLittleFingerKnuckle": "right_pinky_pip",
+    "rightLittleFingerIntermediateBase": "right_pinky_dip",
+    "rightLittleFingerIntermediateTip": "right_pinky_dip",
+    "rightLittleFingerTip": "right_pinky_tip",
+    "rightMiddleFingerMetacarpal": "right_middle_finger_mcp",
+    "rightMiddleFingerKnuckle": "right_middle_finger_pip",
+    "rightMiddleFingerIntermediateBase": "right_middle_finger_dip",
+    "rightMiddleFingerIntermediateTip": "right_middle_finger_dip",
+    "rightMiddleFingerTip": "right_middle_finger_tip",
+    "rightRingFingerMetacarpal": "right_ring_finger_mcp",
+    "rightRingFingerKnuckle": "right_ring_finger_pip",
+    "rightRingFingerIntermediateBase": "right_ring_finger_dip",
+    "rightRingFingerIntermediateTip": "right_ring_finger_dip",
+    "rightRingFingerTip": "right_ring_finger_tip",
+    "rightThumbKnuckle": "right_thumb_cmc",
+    "rightThumbIntermediateBase": "right_thumb_mcp",
+    "rightThumbIntermediateTip": "right_thumb_ip",
+    "rightThumbTip": "right_thumb_tip",
 }
 
 
@@ -111,9 +104,6 @@ class EgoDexAdapter(BaseAdapter):
                 )
             }
 
-    # ------------------------------------------------------------------
-    # New unified interface implementation
-    # ------------------------------------------------------------------
 
     def get_dataset_info(self) -> DatasetInfo:  # noqa: D401
         intr_dict = self.get_camera_intrinsics()
@@ -319,7 +309,8 @@ class EgoDexAdapter(BaseAdapter):
         hands_group = traj_group.create_group("hands")
         for hand in ["left", "right"]:
             hand_group = hands_group.create_group(hand)
-            source_key = f"transforms/{hand.title()}Hand"
+            # AVP uses lowercase first letter (e.g. 'leftHand', 'rightHand')
+            source_key = f"transforms/{hand}Hand"
             hand_transforms = f_in.get(source_key)
             if isinstance(hand_transforms, h5py.Dataset):
                 raw_hand_poses = hand_transforms[:]
