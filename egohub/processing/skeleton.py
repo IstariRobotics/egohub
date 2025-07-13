@@ -3,6 +3,7 @@ from typing import Dict, List, Optional, Tuple
 import h5py
 import numpy as np
 
+from egohub.adapters.dataset_info import DatasetInfo
 from egohub.constants import CANONICAL_SKELETON_JOINTS
 
 
@@ -64,6 +65,47 @@ class SkeletonProcessor:
             joint_names,
             np.stack(positions_list, axis=1),
             np.stack(confidences_list, axis=1),
+        )
+
+    def get_remapped_skeleton_data(
+        self,
+        f_in: h5py.File,
+        num_frames: int,
+        dataset_info: DatasetInfo,
+    ) -> Optional[Tuple[List[str], np.ndarray, np.ndarray]]:
+        """
+        Extracts raw skeleton data and remaps it to the canonical skeleton
+        format using the provided DatasetInfo.
+
+        Args:
+            f_in (h5py.File): The open source HDF5 file.
+            num_frames (int): The number of frames in the sequence.
+            dataset_info (DatasetInfo): The dataset information containing joint_remap.
+
+        Returns:
+            An optional tuple containing:
+            - A list of canonical joint names.
+            - An array of remapped joint positions.
+            - An array of remapped joint confidences.
+            Returns None if the required groups are not found.
+        """
+        data = self.get_skeleton_data(f_in, num_frames)
+        if data is None:
+            return None
+
+        source_joint_names, source_positions, source_confidences = data
+
+        canonical_positions, canonical_confidences = remap_skeleton(
+            source_positions=source_positions,
+            source_confidences=source_confidences,
+            source_joint_names=source_joint_names,
+            joint_map=dataset_info.joint_remap,
+        )
+
+        return (
+            list(CANONICAL_SKELETON_JOINTS),
+            canonical_positions,
+            canonical_confidences,
         )
 
 

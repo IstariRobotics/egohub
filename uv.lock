@@ -407,9 +407,11 @@ dependencies = [
     { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.10.*'" },
     { name = "scipy", version = "1.16.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "smplx" },
+    { name = "timm" },
     { name = "torch" },
     { name = "torchvision" },
     { name = "tqdm" },
+    { name = "transformers" },
 ]
 
 [package.optional-dependencies]
@@ -447,6 +449,8 @@ temporal = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "pytest" },
+    { name = "pytest-regressions" },
     { name = "types-pyyaml" },
 ]
 
@@ -470,18 +474,24 @@ requires-dist = [
     { name = "scikit-learn", marker = "extra == 'all'" },
     { name = "scipy" },
     { name = "smplx" },
+    { name = "timm", specifier = ">=1.0.16" },
     { name = "timm", marker = "extra == 'all'" },
     { name = "torch" },
     { name = "torchvision" },
     { name = "tqdm" },
     { name = "tqdm", marker = "extra == 'all'" },
+    { name = "transformers", specifier = ">=4.53.1" },
     { name = "transformers", marker = "extra == 'all'" },
     { name = "ultralytics", marker = "extra == 'all'" },
 ]
 provides-extras = ["dev", "all", "temporal"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "types-pyyaml", specifier = ">=6.0.12.20250516" }]
+dev = [
+    { name = "pytest", specifier = ">=8.4.1" },
+    { name = "pytest-regressions", specifier = ">=2.8.1" },
+    { name = "types-pyyaml", specifier = ">=6.0.12.20250516" },
+]
 
 [[package]]
 name = "exceptiongroup"

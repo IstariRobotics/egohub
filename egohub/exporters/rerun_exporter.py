@@ -1,4 +1,5 @@
 import io
+import json
 import logging
 from pathlib import Path
 from typing import List, Optional
@@ -75,7 +76,7 @@ class RerunExporter:
 
         self._log_static_metadata(traj_group)
         self._log_static_camera_data(traj_group, cam_keys)
-        self._set_pose_annotation_context()
+        self._set_pose_annotation_context(traj_group)
 
         timestamps_dset = traj_group.get("metadata/timestamps_ns")
         if not isinstance(timestamps_dset, h5py.Dataset):
@@ -167,15 +168,29 @@ class RerunExporter:
                 static=True,
             )
 
-    def _set_pose_annotation_context(self) -> None:
+    def _set_pose_annotation_context(self, traj_group: h5py.Group) -> None:
+        # Try to load dataset_info if present
+        joint_names = CANONICAL_SKELETON_JOINTS
+        hierarchy = CANONICAL_SKELETON_HIERARCHY
+        try:
+            f = traj_group.file  # type: ignore[attr-defined]
+            if "dataset_info" in f.attrs:
+                ds_attr = f.attrs["dataset_info"]
+                if isinstance(ds_attr, bytes):
+                    ds_str = ds_attr.decode()
+                else:
+                    ds_str = str(ds_attr)
+                info_dict = json.loads(ds_str)
+                joint_names = info_dict.get("joint_names", joint_names)
+                hierarchy = info_dict.get("joint_hierarchy", hierarchy)
+        except Exception:
+            pass
+
         keypoint_connections = []
-        for child, parent in CANONICAL_SKELETON_HIERARCHY.items():
-            if (
-                child in CANONICAL_SKELETON_JOINTS
-                and parent in CANONICAL_SKELETON_JOINTS
-            ):
-                child_id = CANONICAL_SKELETON_JOINTS.index(child)
-                parent_id = CANONICAL_SKELETON_JOINTS.index(parent)
+        for child, parent in hierarchy.items():
+            if child in joint_names and parent in joint_names:
+                child_id = joint_names.index(child)
+                parent_id = joint_names.index(parent)
                 keypoint_connections.append((parent_id, child_id))
 
         rr.log(
@@ -183,10 +198,10 @@ class RerunExporter:
             rr.AnnotationContext(
                 [
                     rr.ClassDescription(
-                        info=rr.AnnotationInfo(id=0, label="Canonical Skeleton"),
+                        info=rr.AnnotationInfo(id=0, label="Skeleton"),
                         keypoint_annotations=[
                             rr.AnnotationInfo(id=i, label=name)
-                            for i, name in enumerate(CANONICAL_SKELETON_JOINTS)
+                            for i, name in enumerate(joint_names)
                         ],
                         keypoint_connections=keypoint_connections,
                     )

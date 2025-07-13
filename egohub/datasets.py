@@ -10,6 +10,7 @@ in a PyTorch-compatible format.
 from __future__ import annotations
 
 import io
+import json
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -20,6 +21,8 @@ import numpy as np
 import torch
 from PIL import Image
 from torch.utils.data import Dataset
+
+from egohub.adapters.dataset_info import DatasetInfo
 
 
 class BaseDatasetReader(Dataset, ABC):
@@ -80,6 +83,60 @@ class EgocentricH5Dataset(BaseDatasetReader):
 
         # Build global frame index
         self.frame_index = self._build_frame_index(trajectories)
+
+        # Load DatasetInfo if present
+        with h5py.File(self.h5_path, "r") as f:
+            if "dataset_info" in f.attrs:
+                info_str = f.attrs["dataset_info"]
+                if isinstance(info_str, bytes):
+                    info_str = info_str.decode()
+                info_dict = json.loads(info_str)
+                camera_intrinsics = np.array(
+                    info_dict.get(
+                        "camera_intrinsics", [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
+                    )
+                )
+                view_coordinates = info_dict.get("view_coordinates", "RDF")
+                frame_rate = info_dict.get("frame_rate", 30.0)
+                joint_names = info_dict.get("joint_names", [])
+                joint_hierarchy = info_dict.get("joint_hierarchy", {})
+                joint_remap = info_dict.get("joint_remap", {})
+                depth_scale = info_dict.get("depth_scale", 1.0)
+                camera_distortion = info_dict.get("camera_distortion")
+                object_categories = info_dict.get("object_categories", [])
+                object_palette = (
+                    np.array(info_dict.get("object_palette"))
+                    if info_dict.get("object_palette") is not None
+                    else None
+                )
+                mano_betas_left = (
+                    np.array(info_dict.get("mano_betas_left"))
+                    if info_dict.get("mano_betas_left") is not None
+                    else None
+                )
+                mano_betas_right = (
+                    np.array(info_dict.get("mano_betas_right"))
+                    if info_dict.get("mano_betas_right") is not None
+                    else None
+                )
+                modalities = info_dict.get("modalities", {"rgb": True, "depth": False})
+                self.dataset_info = DatasetInfo(
+                    camera_intrinsics=camera_intrinsics,
+                    view_coordinates=view_coordinates,
+                    frame_rate=frame_rate,
+                    joint_names=joint_names,
+                    joint_hierarchy=joint_hierarchy,
+                    joint_remap=joint_remap,
+                    depth_scale=depth_scale,
+                    camera_distortion=camera_distortion,
+                    object_categories=object_categories,
+                    object_palette=object_palette,
+                    mano_betas_left=mano_betas_left,
+                    mano_betas_right=mano_betas_right,
+                    modalities=modalities,
+                )
+            else:
+                self.dataset_info = None
 
         # Calculate number of trajectories and frames
         self.num_trajectories = len(set(idx[0] for idx in self.frame_index))
@@ -198,13 +255,14 @@ class EgocentricH5Dataset(BaseDatasetReader):
         """Return the total number of frames across all trajectories."""
         return len(self.frame_index)
 
-    def _load_camera_data(
+    def _load_camera_data(  # noqa: C901
         self, traj_group: h5py.Group, frame_idx: int, f: h5py.File
     ) -> Dict[str, Dict]:
         """Load camera data including RGB, poses, and intrinsics."""
         rgb_data = {}
         camera_pose_data = {}
         camera_intrinsics_data = {}
+        depth_data = {}
 
         for cam_name in self.camera_streams:
             cam_group_path = f"cameras/{cam_name}"
@@ -240,10 +298,33 @@ class EgocentricH5Dataset(BaseDatasetReader):
                 intrinsics = intrinsics_dset[:]
                 camera_intrinsics_data[cam_name] = torch.from_numpy(intrinsics).float()
 
+            # Load depth if available
+            depth_grp = cam_group.get("depth")
+            if isinstance(depth_grp, h5py.Group):
+                frame_sizes = depth_grp.get("frame_sizes")
+                depth_bytes = depth_grp.get("depth_bytes")
+                frame_indices_dset = depth_grp.get("frame_indices")
+                if (
+                    isinstance(frame_sizes, h5py.Dataset)
+                    and isinstance(depth_bytes, h5py.Dataset)
+                    and isinstance(frame_indices_dset, h5py.Dataset)
+                ):
+                    frame_indices = frame_indices_dset[:]
+                    current_indices = np.where(frame_indices == frame_idx)[0]
+                    for idx in current_indices:
+                        num_bytes = frame_sizes[idx]
+                        encoded_depth = depth_bytes[idx, :num_bytes]
+                        depth_img = Image.open(io.BytesIO(encoded_depth))
+                        depth = np.array(depth_img).astype(np.float32)
+                        if self.dataset_info:
+                            depth *= self.dataset_info.depth_scale
+                        depth_data[cam_name] = torch.from_numpy(depth)
+
         return {
             "rgb": rgb_data,
             "camera_pose": camera_pose_data,
             "camera_intrinsics": camera_intrinsics_data,
+            "depth": depth_data,
         }
 
     def _load_hand_data(
@@ -297,16 +378,21 @@ class EgocentricH5Dataset(BaseDatasetReader):
         if not isinstance(objects_group, h5py.Group):
             return objects_data
 
-        for obj_name, obj_group in objects_group.items():
-            if isinstance(obj_group, h5py.Group):
-                for dset_name, dset in obj_group.items():
+        for label, obj_grp in objects_group.items():
+            if isinstance(obj_grp, h5py.Group):
+                for dset_name, dset in obj_grp.items():
                     if isinstance(dset, h5py.Dataset):
                         group_name = dset_name.rsplit("_", 1)[0]
                         if group_name not in objects_data:
                             objects_data[group_name] = {}
-                        objects_data[group_name][obj_name] = torch.from_numpy(
+                        objects_data[group_name][label] = torch.from_numpy(
                             dset[frame_idx]
                         )
+
+        if self.dataset_info:
+            objects_data["categories"] = self.dataset_info.object_categories
+            objects_data["palette"] = self.dataset_info.object_palette
+
         return objects_data
 
     def __getitem__(
