@@ -1,11 +1,13 @@
 import logging
 import uuid
+from typing import Any, Dict
 
 import cv2
 import h5py
 import numpy as np
 
 from egohub.adapters.base import BaseAdapter
+from egohub.adapters.dataset_info import DatasetInfo
 from egohub.constants import EGODEX_SKELETON_HIERARCHY, EGODEX_SKELETON_JOINTS
 from egohub.processing.skeleton import remap_skeleton
 from egohub.processing.synchronization import generate_indices
@@ -95,6 +97,46 @@ class EgoDexAdapter(BaseAdapter):
     @property
     def source_skeleton_hierarchy(self) -> dict[str, str]:
         return EGODEX_SKELETON_HIERARCHY
+
+    def get_camera_intrinsics(self) -> Dict[str, Any]:
+        if self.config and "default_intrinsics" in self.config:
+            return {
+                "matrix": np.array(self.config["default_intrinsics"], dtype=np.float32)
+            }
+        else:
+            return {
+                "matrix": np.array(
+                    [[736.6339, 0.0, 960.0], [0.0, 736.6339, 540.0], [0.0, 0.0, 1.0]],
+                    dtype=np.float32,
+                )
+            }
+
+    # ------------------------------------------------------------------
+    # New unified interface implementation
+    # ------------------------------------------------------------------
+
+    def get_dataset_info(self) -> DatasetInfo:  # noqa: D401
+        intr_dict = self.get_camera_intrinsics()
+        intr: np.ndarray
+        if isinstance(intr_dict, dict):
+            intr = intr_dict["matrix"]  # type: ignore[assignment]
+        else:
+            intr = intr_dict  # type: ignore[assignment]
+
+        from egohub.constants import (
+            CANONICAL_SKELETON_HIERARCHY,
+            CANONICAL_SKELETON_JOINTS,
+        )
+
+        return DatasetInfo(
+            camera_intrinsics=intr,
+            view_coordinates="RDF",
+            frame_rate=30.0,
+            joint_names=list(CANONICAL_SKELETON_JOINTS),
+            joint_hierarchy=CANONICAL_SKELETON_HIERARCHY,
+            joint_remap=EGODEX_TO_CANONICAL_SKELETON_MAP,
+            depth_scale=1.0,
+        )
 
     def discover_sequences(self) -> list[dict]:
         """
@@ -341,11 +383,12 @@ class EgoDexAdapter(BaseAdapter):
                     all_confidences = np.stack(confidences_list, axis=1)
 
                     # Remap the skeleton to the canonical joint definition
+                    info = self.get_dataset_info()
                     canonical_positions, canonical_confidences = remap_skeleton(
                         source_positions=source_positions,
                         source_confidences=all_confidences,
                         source_joint_names=self.source_joint_names,
-                        joint_map=EGODEX_TO_CANONICAL_SKELETON_MAP,
+                        joint_map=info.joint_remap,
                     )
 
                     skeleton_group.create_dataset(

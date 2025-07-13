@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import h5py
+import numpy as np
 import yaml
 from tqdm import tqdm
 
@@ -87,6 +88,20 @@ class BaseAdapter(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def get_camera_intrinsics(self) -> Dict[str, Any]:
+        """Returns dataset-specific camera intrinsics as a dictionary."""
+        pass
+
+    # ------------------------------------------------------------------
+    # New unified dataset metadata interface
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    def get_dataset_info(self):  # -> "DatasetInfo": forward-ref avoid import cycle
+        """Return a `DatasetInfo` instance containing all dataset metadata."""
+        raise NotImplementedError
+
+    @abstractmethod
     def discover_sequences(self) -> List[Dict[str, Any]]:
         """
         Discovers all processable data sequences in the raw_dir.
@@ -144,7 +159,26 @@ class BaseAdapter(ABC):
 
         logging.info("Creating HDF5 file and processing sequences...")
         self.output_file.parent.mkdir(parents=True, exist_ok=True)
+        import json
+        from dataclasses import asdict
+
         with h5py.File(self.output_file, "w") as f_out:
+            # Store dataset_info if provided
+            try:
+                info = self.get_dataset_info()  # type: ignore[call-arg]
+
+                def _convert(obj):
+                    if isinstance(obj, np.ndarray):
+                        return obj.tolist()
+                    if isinstance(obj, dict):
+                        return {k: _convert(v) for k, v in obj.items()}
+                    if isinstance(obj, list):
+                        return [_convert(v) for v in obj]
+                    return obj
+
+                f_out.attrs["dataset_info"] = json.dumps(_convert(asdict(info)))
+            except NotImplementedError:
+                pass
             for i, seq_info in enumerate(tqdm(sequences, desc="Processing Sequences")):
                 traj_group = f_out.create_group(f"trajectory_{i:04d}")
                 self.process_sequence(seq_info, traj_group)

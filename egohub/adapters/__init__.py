@@ -1,6 +1,5 @@
 # This file makes the 'adapters' directory a Python package.
 from .base import BaseAdapter
-from .egodex.egodex import EgoDexAdapter
 
 # Note: AriaDigitalTwinAdapter is temporarily disabled
 # due to missing implementation file.
@@ -8,6 +7,5 @@ from .egodex.egodex import EgoDexAdapter
 
 __all__ = [
     "BaseAdapter",
-    "EgoDexAdapter",
     # "AriaDigitalTwinAdapter",
 ]
