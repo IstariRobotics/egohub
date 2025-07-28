@@ -297,6 +297,42 @@ At any point, you can visualize the contents of an HDF5 file with Rerun. This is
 egohub visualize data/processed/egodex.h5
 ```
 
+### Visualization
+
+Visualizing data is a critical step for debugging and analysis. `egohub` uses the Rerun viewer, which can be run in a few different ways depending on your setup.
+
+#### Local Visualization
+
+If you are running `egohub` on your local machine, you can visualize an HDF5 file directly. This will automatically open the Rerun viewer.
+
+```bash
+egohub visualize path/to/your.h5
+```
+
+#### Remote Visualization
+
+When working on a remote machine (e.g., a cloud server), you need to use the Rerun web viewer to access the visualization from your local browser. This is a two-step process:
+
+**Step 1: Generate the Rerun Data File**
+
+First, run the `visualize` command with the `--output-rrd` flag to save the visualization data to a file.
+
+```bash
+egohub visualize path/to/your.h5 --output-rrd output.rrd
+```
+
+This will create a file named `output.rrd` containing the data for Rerun.
+
+**Step 2: Serve the RRD File**
+
+Next, use the `rerun` command to serve the `.rrd` file with the `--web-viewer` flag.
+
+```bash
+rerun output.rrd --web-viewer
+```
+
+This will start a web server on the remote machine. You can then open your local web browser and navigate to `http://<remote_machine_ip>:9090` to view the visualization. Replace `<remote_machine_ip>` with the IP address of your remote machine.
+
 ### End-to-End Example: EgoDex
 
 This example walks through the full pipeline for a single sequence from the EgoDex dataset, from raw data to visualization.
