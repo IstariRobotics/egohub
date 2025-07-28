@@ -239,6 +239,19 @@ def run_uvd_on_hdf5(
                 )
                 logging.info(f"Saved {len(subgoal_indices)} subgoals for '{seq_name}'.")
 
+                # 4b. Create UVD action boundaries for visualization
+                uvd_action_group = traj_group.require_group("actions/uvd")
+                # Build (start, end) pairs from consecutive subgoal indices
+                if len(subgoal_indices) > 1:
+                    boundaries = np.column_stack(
+                        (subgoal_indices[:-1], subgoal_indices[1:])
+                    ).astype(np.int32)
+                    if "action_boundaries" in uvd_action_group:
+                        del uvd_action_group["action_boundaries"]
+                    uvd_action_group.create_dataset(
+                        "action_boundaries", data=boundaries, dtype=np.int32
+                    )
+
                 # 5. Visualize if requested
                 if visualize_subgoals:
                     vis_dir = hdf5_path.parent / "subgoal_visualizations" / seq_name
@@ -297,6 +310,12 @@ def main():
         "--visualize-subgoals",
         action="store_true",
         help="Save the subgoal frames as images for inspection.",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda" if torch.cuda.is_available() else "cpu",
+        help="Device to use ('cuda' or 'cpu').",
     )
     parser.add_argument(
         "--force",
