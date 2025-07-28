@@ -12,9 +12,6 @@ class BaseBackend(ABC):
     def run(self, traj_group: h5py.Group, **kwargs: Any) -> dict:
         """
         Runs the backend-specific logic.
-
-        This method should be implemented by all subclasses to perform
-        the actual model loading and inference.
         """
         raise NotImplementedError
 
@@ -24,14 +21,6 @@ class BaseBackend(ABC):
     ) -> np.ndarray | None:
         """
         Generates embeddings for a list of video frames.
-
-        Args:
-            frames: A list of RGB frames (as NumPy arrays).
-            **kwargs: Backend-specific arguments for embedding generation.
-
-        Returns:
-            A NumPy array of embeddings, or None if the backend does not
-            support this operation.
         """
         raise NotImplementedError
 
