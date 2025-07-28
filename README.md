@@ -366,6 +366,7 @@ This table lists the datasets currently supported by `egohub` for ingestion. We 
 | Dataset Name | CLI Identifier | Adapter Class   | Notes                                                 |
 | :------------- | :--------------- | :---------------- | :------------------------------------------------------ |
 | **EgoDex**   | `egodex`       | `EgoDexAdapter` | Supports video, camera pose, and hand/skeleton poses. |
+| **HO-3D v3** | `ho3d`         | `HO3DAdapter`   | Supports video and depth.                           |
 
 Instructions on downoading datasets can be found in [`docs/README_DATASETS.md`](docs/README_DATASETS.md).
 
