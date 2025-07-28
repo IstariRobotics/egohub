@@ -98,6 +98,7 @@ class RerunExporter:
             self._log_temporal_camera_data(traj_group, cam_keys, frame_idx)
             self._log_temporal_object_data(traj_group, cam_keys, frame_idx)
             self._log_temporal_skeleton_data(traj_group, frame_idx)
+            self._log_uvd_results(traj_group, cam_keys, frame_idx)
 
     def _create_blueprint(self, camera_names: List[str]) -> rrb.Blueprint:
         spatial2d_views = [
@@ -370,6 +371,51 @@ class RerunExporter:
                         class_ids=0,
                         keypoint_ids=np.arange(len(positions)),
                         colors=colors,
+                    ),
+                )
+
+    def _log_uvd_results(
+        self, traj_group: h5py.Group, cam_keys: List[str], frame_idx: int
+    ):
+        """Logs UVD action boundaries as vertical lines on the 2D image."""
+        uvd_group = traj_group.get("actions/uvd")
+        if not isinstance(uvd_group, h5py.Group):
+            return
+
+        boundaries_dset = uvd_group.get("action_boundaries")
+        if not isinstance(boundaries_dset, h5py.Dataset):
+            return
+
+        boundaries = boundaries_dset[:]
+        is_boundary_frame = any(
+            frame_idx == start or frame_idx == end for start, end in boundaries
+        )
+
+        if is_boundary_frame and cam_keys:
+            # Get image dimensions to draw the line across the full height
+            cam_group = traj_group.get(f"cameras/{cam_keys[0]}")
+            height = 1080  # Default
+            if isinstance(cam_group, h5py.Group):
+                rgb_grp = cam_group.get("rgb")
+                if isinstance(rgb_grp, h5py.Group):
+                    image_bytes = rgb_grp.get("image_bytes")
+                    if isinstance(image_bytes, h5py.Dataset) and len(image_bytes) > 0:
+                        encoded_frame = image_bytes[0]
+                        image = Image.open(io.BytesIO(encoded_frame))
+                        width, height = image.size
+                        if height > width:  # Portrait
+                            height, width = width, height
+
+            # Log a vertical line on each camera view
+            for cam_key in cam_keys:
+                img_path = f"world/cameras/{cam_key}/image"
+                rr.log(
+                    f"{img_path}/uvd_boundary",
+                    rr.LineStrips2D(
+                        [[(frame_idx, 0), (frame_idx, height)]],
+                        colors=[(255, 0, 0)],  # Red line
+                        radii=[2],
+                        labels=["Action Boundary"],
                     ),
                 )
 

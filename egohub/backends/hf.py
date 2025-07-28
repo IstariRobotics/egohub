@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from typing import Any
 
 import cv2
 import h5py
 import numpy as np
+import torch
 from PIL import Image
 from tqdm import tqdm
+from transformers import AutoModel, AutoProcessor
 
 from egohub.backends.base import BaseBackend
 from egohub.utils.video_utils import hdf5_to_cv2_video
@@ -57,10 +60,11 @@ class HuggingFaceBackend(BaseBackend):
         self.model_name = model_name
         self.task_name = task_name
         self.model_kwargs = kwargs
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         logger.info(
             f"Initializing HF Backend for model: {self.model_name}, "
-            f"task: {self.task_name}"
+            f"task: {self.task_name} on device: {self.device}"
         )
 
         if self.task_name == "object-detection":
@@ -77,6 +81,9 @@ class HuggingFaceBackend(BaseBackend):
                     "mmpose is required for pose estimation. "
                     "Install it with: pip install egohub[pose] or pip install mmpose"
                 )
+        elif self.task_name == "visual-embedding":
+            self.processor = AutoProcessor.from_pretrained(self.model_name, trust_remote_code=True)
+            self.model = AutoModel.from_pretrained(self.model_name, trust_remote_code=True).to(self.device)
         else:
             raise ValueError(
                 f"Unsupported task for HuggingFaceBackend: {self.task_name}"
@@ -100,6 +107,31 @@ class HuggingFaceBackend(BaseBackend):
         else:
             # This should not be reachable due to the __init__ check
             raise ValueError(f"Unsupported task: {self.task_name}")
+
+    def get_embeddings(
+        self, frames: list[np.ndarray], batch_size: int = 32, **kwargs: Any
+    ) -> np.ndarray:
+        """
+        Generates embeddings for a list of video frames using the loaded model.
+        """
+        if self.task_name != "visual-embedding":
+            raise ValueError(
+                "get_embeddings is only supported for 'visual-embedding' task."
+            )
+
+        all_embeddings = []
+        with torch.no_grad():
+            for i in tqdm(range(0, len(frames), batch_size), desc="Generating Embeddings"):
+                batch_frames = frames[i : i + batch_size]
+                inputs = self.processor(images=batch_frames, return_tensors="pt").to(
+                    self.device
+                )
+                outputs = self.model(**inputs)
+                # Using pooler_output for a single embedding per image
+                embeddings = outputs.pooler_output.cpu().numpy()
+                all_embeddings.append(embeddings)
+
+        return np.vstack(all_embeddings)
 
     def _run_pose_estimation(self, traj_group: h5py.Group, **kwargs) -> dict:
         """Runs pose estimation and returns results."""
