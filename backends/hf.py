@@ -1,0 +1,186 @@
+from __future__ import annotations
+
+import logging
+from collections import defaultdict
+from typing import Any
+
+import cv2
+import h5py
+import numpy as np
+import torch
+from PIL import Image
+from tqdm import tqdm
+from transformers import AutoModel, AutoProcessor
+
+from egohub.backends.base import BaseBackend
+from egohub.utils.video_utils import hdf5_to_cv2_video
+
+logger = logging.getLogger(__name__)
+
+
+def _extract_video_data(traj_group: h5py.Group) -> tuple[list[np.ndarray], np.ndarray]:
+    """Extract video frames and timestamps from trajectory group."""
+    cameras_group = traj_group.get("cameras")
+    if not isinstance(cameras_group, h5py.Group) or "ego_camera" not in cameras_group:
+        raise ValueError("No 'ego_camera' found in cameras group")
+
+    ego_camera_group = cameras_group.get("ego_camera")
+    if not isinstance(ego_camera_group, h5py.Group):
+        raise ValueError("'ego_camera' is not a group")
+
+    rgb_group = ego_camera_group.get("rgb")
+    if not isinstance(rgb_group, h5py.Group):
+        raise ValueError("No 'rgb' group found for 'ego_camera'")
+
+    video_frames = list(hdf5_to_cv2_video(rgb_group))
+
+    metadata_group = traj_group.get("metadata")
+    if isinstance(metadata_group, h5py.Group) and "timestamps_ns" in metadata_group:
+        timestamps_ns = np.array(metadata_group["timestamps_ns"])
+    else:
+        logger.warning("No timestamps found, using frame indices")
+        timestamps_ns = np.arange(len(video_frames), dtype=np.uint64)
+
+    return video_frames, timestamps_ns
+
+
+class HuggingFaceBackend(BaseBackend):
+    """A backend for running models from the Hugging Face Hub."""
+
+    def __init__(self, model_name: str, task_name: str, **kwargs):
+        """
+        Initializes the backend with a Hugging Face model.
+        """
+        self.model_name = model_name
+        self.task_name = task_name
+        self.model_kwargs = kwargs
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        logger.info(
+            f"Initializing HF Backend for model: {self.model_name}, "
+            f"task: {self.task_name} on device: {self.device}"
+        )
+
+        if self.task_name == "object-detection":
+            from transformers.pipelines import pipeline
+            self.detector = pipeline(self.task_name, model=self.model_name)
+        elif self.task_name == "pose-estimation":
+            try:
+                from mmpose.apis import MMPoseInferencer
+                self.detector = MMPoseInferencer(self.model_name)
+            except ImportError:
+                raise ImportError(
+                    "mmpose is required for pose estimation. "
+                    "Install it with: pip install egohub[pose] or pip install mmpose"
+                )
+        elif self.task_name == "visual-embedding":
+            self.processor = AutoProcessor.from_pretrained(self.model_name, trust_remote_code=True)
+            self.model = AutoModel.from_pretrained(self.model_name, trust_remote_code=True).to(self.device)
+        else:
+            raise ValueError(f"Unsupported task for HuggingFaceBackend: {self.task_name}")
+
+    def run(self, traj_group: h5py.Group, **kwargs) -> dict:
+        """
+        Runs the specified task on the trajectory's video.
+        """
+        if self.task_name == "object-detection":
+            return self._run_object_detection(traj_group, **kwargs)
+        elif self.task_name == "pose-estimation":
+            return self._run_pose_estimation(traj_group, **kwargs)
+        else:
+            raise ValueError(f"Unsupported task: {self.task_name}")
+
+    def get_embeddings(
+        self, frames: list[np.ndarray], batch_size: int = 32, **kwargs: Any
+    ) -> np.ndarray:
+        """
+        Generates embeddings for a list of video frames using the loaded model.
+        """
+        if self.task_name != "visual-embedding":
+            raise ValueError("get_embeddings is only supported for 'visual-embedding' task.")
+
+        all_embeddings = []
+        with torch.no_grad():
+            for i in tqdm(range(0, len(frames), batch_size), desc="Generating Embeddings"):
+                batch_frames = frames[i : i + batch_size]
+                inputs = self.processor(images=batch_frames, return_tensors="pt").to(self.device)
+                outputs = self.model(**inputs)
+                embeddings = outputs.pooler_output.cpu().numpy()
+                all_embeddings.append(embeddings)
+
+        return np.vstack(all_embeddings)
+
+    def _run_pose_estimation(self, traj_group: h5py.Group, **kwargs) -> dict:
+        """Runs pose estimation and returns results."""
+        video_frames, _ = _extract_video_data(traj_group)
+        if not video_frames:
+            logger.warning("No video frames found, skipping pose estimation.")
+            return {}
+
+        all_keypoints = []
+        all_confidences = []
+        frame_indices = []
+
+        for i, frame_np in enumerate(tqdm(video_frames, desc="Pose Estimation")):
+            frame_rgb = cv2.cvtColor(frame_np, cv2.COLOR_BGR2RGB)
+            result_generator = self.detector([frame_rgb], show=False)
+            results = next(result_generator)
+
+            if results["predictions"]:
+                person_result = results["predictions"][0][0]
+                keypoints = person_result["keypoints"]
+                confidences = person_result["keypoint_scores"]
+                all_keypoints.append(keypoints)
+                all_confidences.append(confidences)
+                frame_indices.append(i)
+
+        return {
+            "keypoints": all_keypoints,
+            "confidences": all_confidences,
+            "frame_indices": frame_indices,
+        }
+
+    def _run_object_detection(self, traj_group: h5py.Group, **kwargs) -> dict:
+        """Runs object detection and returns results."""
+        cameras_group = traj_group.get("cameras")
+        if not isinstance(cameras_group, h5py.Group) or "ego_camera" not in cameras_group:
+            logger.warning("No 'ego_camera' found, skipping object detection.")
+            return {}
+
+        ego_camera_group = cameras_group.get("ego_camera")
+        if not isinstance(ego_camera_group, h5py.Group):
+            logger.warning("'ego_camera' is not a group, skipping object detection.")
+            return {}
+
+        rgb_group = ego_camera_group.get("rgb")
+        if not isinstance(rgb_group, h5py.Group):
+            logger.warning("No 'rgb' group found for 'ego_camera', skipping.")
+            return {}
+
+        frames_iterator = hdf5_to_cv2_video(rgb_group)
+        frame_sizes_dset = rgb_group.get("frame_sizes")
+        if not isinstance(frame_sizes_dset, h5py.Dataset):
+            logger.warning("No 'frame_sizes' dataset found, skipping.")
+            return {}
+
+        num_frames = len(frame_sizes_dset)
+        all_detections = defaultdict(list)
+
+        logger.info("Running object detection on video frames...")
+        for i, frame_cv2 in enumerate(
+            tqdm(frames_iterator, total=num_frames, desc="Object Detection")
+        ):
+            image = Image.fromarray(frame_cv2[:, :, ::-1])  # BGR to RGB
+            predictions = self.detector(image)
+
+            for pred in predictions:
+                box = pred["box"]
+                bbox = (
+                    box["xmin"],
+                    box["ymin"],
+                    box["xmax"] - box["xmin"],
+                    box["ymax"] - box["ymin"],
+                )
+                all_detections[pred["label"]].append((i, bbox, pred["score"]))
+
+        return {"detections": all_detections, "num_frames": num_frames} 
