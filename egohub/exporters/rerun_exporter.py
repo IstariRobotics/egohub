@@ -227,6 +227,83 @@ class RerunExporter:
             static=True,
         )
 
+    def _log_camera_pose(
+        self, cam_group: h5py.Group, cam_key: str, frame_idx: int
+    ) -> None:
+        """Logs the temporal pose of a single camera."""
+        pose_dset = cam_group.get("pose_in_world")
+        pose_indices_dset = cam_group.get("pose_indices")
+        if not isinstance(pose_dset, h5py.Dataset):
+            return
+
+        pose_row = frame_idx
+        if isinstance(pose_indices_dset, h5py.Dataset) and frame_idx < len(
+            pose_indices_dset
+        ):
+            pose_row = int(pose_indices_dset[frame_idx])
+        if pose_row < len(pose_dset):
+            pose = pose_dset[pose_row]
+            rr.log(
+                f"world/cameras/{cam_key}",
+                rr.Transform3D(translation=pose[:3, 3], mat3x3=pose[:3, :3]),
+            )
+
+    def _log_rgb_image(
+        self, cam_group: h5py.Group, cam_key: str, frame_idx: int
+    ) -> None:
+        """Logs a single RGB image for a given camera and frame."""
+        rgb_grp = cam_group.get("rgb")
+        if not isinstance(rgb_grp, h5py.Group):
+            return
+
+        frame_sizes = rgb_grp.get("frame_sizes")
+        image_bytes = rgb_grp.get("image_bytes")
+        frame_indices_dset = rgb_grp.get("frame_indices")
+
+        if not (
+            isinstance(frame_sizes, h5py.Dataset)
+            and isinstance(image_bytes, h5py.Dataset)
+            and isinstance(frame_indices_dset, h5py.Dataset)
+        ):
+            return
+
+        frame_indices = frame_indices_dset[:]
+        current_indices = np.where(frame_indices == frame_idx)[0]
+        for idx in current_indices:
+            _ = frame_sizes[idx]
+            encoded_frame = image_bytes[idx]
+
+            image = Image.open(io.BytesIO(encoded_frame))
+            image_np = np.array(image)
+            if image_np.shape[0] > image_np.shape[1]:
+                image_np = np.rot90(image_np, k=3)
+
+            rr.log(f"world/cameras/{cam_key}/image", rr.Image(image_np))
+
+    def _log_depth_image(
+        self, cam_group: h5py.Group, cam_key: str, frame_idx: int
+    ) -> None:
+        """Logs a single depth image for a given camera and frame."""
+        depth_grp = cam_group.get("depth")
+        if not isinstance(depth_grp, h5py.Group):
+            return
+
+        depth_dset = depth_grp.get("image_meters")
+        frame_indices_dset = depth_grp.get("frame_indices")
+        if not (
+            isinstance(depth_dset, h5py.Dataset)
+            and isinstance(frame_indices_dset, h5py.Dataset)
+        ):
+            return
+
+        frame_indices = frame_indices_dset[:]
+        current_indices = np.where(frame_indices == frame_idx)[0]
+        for idx in current_indices:
+            depth_map = depth_dset[idx]
+            rr.log(
+                f"world/cameras/{cam_key}/depth", rr.DepthImage(depth_map, meter=1.0)
+            )
+
     def _log_temporal_camera_data(
         self, traj_group: h5py.Group, cam_keys: List[str], frame_idx: int
     ):
@@ -235,62 +312,9 @@ class RerunExporter:
             if not isinstance(cam_group, h5py.Group):
                 continue
 
-            pose_dset = cam_group.get("pose_in_world")
-            pose_indices_dset = cam_group.get("pose_indices")
-            if isinstance(pose_dset, h5py.Dataset):
-                pose_row = frame_idx
-                if isinstance(pose_indices_dset, h5py.Dataset) and frame_idx < len(
-                    pose_indices_dset
-                ):
-                    pose_row = int(pose_indices_dset[frame_idx])
-                if pose_row < len(pose_dset):
-                    pose = pose_dset[pose_row]
-                    rr.log(
-                        f"world/cameras/{cam_key}",
-                        rr.Transform3D(translation=pose[:3, 3], mat3x3=pose[:3, :3]),
-                    )
-
-            rgb_grp = cam_group.get("rgb")
-            if isinstance(rgb_grp, h5py.Group):
-                frame_sizes = rgb_grp.get("frame_sizes")
-                image_bytes = rgb_grp.get("image_bytes")
-                frame_indices_dset = rgb_grp.get("frame_indices")
-                if (
-                    isinstance(frame_sizes, h5py.Dataset)
-                    and isinstance(image_bytes, h5py.Dataset)
-                    and isinstance(frame_indices_dset, h5py.Dataset)
-                ):
-                    frame_indices = frame_indices_dset[:]
-                    current_indices = np.where(frame_indices == frame_idx)[0]
-                    for idx in current_indices:
-                        _ = frame_sizes[idx]  # num_bytes unused; keep for validation
-                        encoded_frame = image_bytes[idx]
-
-                        image = Image.open(io.BytesIO(encoded_frame))
-                        image_np = np.array(image)
-                        # Rotate if image appears in portrait orientation while
-                        # intrinsics expect landscape
-                        if image_np.shape[0] > image_np.shape[1]:
-                            image_np = np.rot90(image_np, k=3)  # rotate 90° CCW
-
-                        rr.log(f"world/cameras/{cam_key}/image", rr.Image(image_np))
-            
-            depth_grp = cam_group.get("depth")
-            if isinstance(depth_grp, h5py.Group):
-                depth_dset = depth_grp.get("image_meters")
-                frame_indices_dset = depth_grp.get("frame_indices")
-                if (
-                    isinstance(depth_dset, h5py.Dataset)
-                    and isinstance(frame_indices_dset, h5py.Dataset)
-                ):
-                    frame_indices = frame_indices_dset[:]
-                    current_indices = np.where(frame_indices == frame_idx)[0]
-                    for idx in current_indices:
-                        depth_map = depth_dset[idx]
-                        rr.log(
-                            f"world/cameras/{cam_key}/depth",
-                            rr.DepthImage(depth_map, meter=1.0),
-                        )
+            self._log_camera_pose(cam_group, cam_key, frame_idx)
+            self._log_rgb_image(cam_group, cam_key, frame_idx)
+            self._log_depth_image(cam_group, cam_key, frame_idx)
 
     def _log_temporal_object_data(
         self, traj_group: h5py.Group, cam_keys: List[str], frame_idx: int

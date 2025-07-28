@@ -13,7 +13,6 @@ from egohub.cli.main import (
     _setup_process_parser,
     _setup_validate_parser,
     _setup_visualize_parser,
-    discover_adapters,
     discover_backends,
     discover_classes,
     discover_tasks,
