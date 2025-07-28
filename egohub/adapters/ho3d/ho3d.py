@@ -1,12 +1,11 @@
 import logging
 import uuid
+from pathlib import Path
 from typing import Any, Dict
 
-import cv2
 import h5py
 import numpy as np
 from PIL import Image
-from pathlib import Path
 
 from egohub.adapters.base import BaseAdapter
 from egohub.adapters.dataset_info import DatasetInfo
@@ -103,9 +102,12 @@ class HO3DAdapter(BaseAdapter):
         depth = np.array(depth_img, dtype=np.uint16)
         # The LSB is in the red channel, and the MSB is in the green channel.
         # This is a bit unusual, normally it's the other way around.
-        # Let's assume the README means we should interpret the RG values as a 16-bit integer.
+        # Let's assume the README means we should interpret the RG values
+        # as a 16-bit integer.
         # Some datasets store depth as (G * 256 + R).
-        depth_scaled = (depth[..., 1].astype(np.uint16) * 256 + depth[..., 0].astype(np.uint16)).astype(np.float32)
+        depth_scaled = (
+            depth[..., 1].astype(np.uint16) * 256 + depth[..., 0].astype(np.uint16)
+        ).astype(np.float32)
         depth_scaled /= 1000.0  # Convert to meters, assuming scale factor of 1000
         return depth_scaled
 
@@ -134,19 +136,19 @@ class HO3DAdapter(BaseAdapter):
                 dtype=np.uint8,
             )
             for i, frame_bytes in enumerate(temp_frames):
-                padded_frame = frame_bytes.ljust(max_frame_size, b'\x00')
+                padded_frame = frame_bytes.ljust(max_frame_size, b"\x00")
                 image_dataset[i] = np.frombuffer(padded_frame, dtype=np.uint8)
             rgb_group.create_dataset(
                 "frame_sizes",
                 data=[len(f) for f in temp_frames],
                 dtype=np.int32,
             )
-            found_streams.add(f"cameras/{camera_group.name.split('/')[-1]}/rgb/image_bytes")
+            found_streams.add(
+                f"cameras/{camera_group.name.split('/')[-1]}/rgb/image_bytes"
+            )
 
             stream_timestamps_ns = np.arange(len(temp_frames)) * (1e9 / 30.0)
-            frame_indices = generate_indices(
-                master_timestamps_ns, stream_timestamps_ns
-            )
+            frame_indices = generate_indices(master_timestamps_ns, stream_timestamps_ns)
             rgb_group.create_dataset("frame_indices", data=frame_indices)
         return found_streams
 
@@ -175,12 +177,12 @@ class HO3DAdapter(BaseAdapter):
             )
             for i, depth_map in enumerate(depth_maps):
                 depth_dataset[i] = depth_map
-            found_streams.add(f"cameras/{camera_group.name.split('/')[-1]}/depth/image_meters")
+            found_streams.add(
+                f"cameras/{camera_group.name.split('/')[-1]}/depth/image_meters"
+            )
 
             stream_timestamps_ns = np.arange(len(depth_maps)) * (1e9 / 30.0)
-            frame_indices = generate_indices(
-                master_timestamps_ns, stream_timestamps_ns
-            )
+            frame_indices = generate_indices(master_timestamps_ns, stream_timestamps_ns)
             depth_group.create_dataset("frame_indices", data=frame_indices)
         return found_streams
 
