@@ -13,6 +13,7 @@ import egohub.backends
 import egohub.tasks
 from egohub.adapters.base import BaseAdapter
 from egohub.adapters.egodex.egodex import EgoDexAdapter
+from egohub.adapters.ho3d.ho3d import HO3DAdapter
 from egohub.backends.base import BaseBackend
 from egohub.exporters.rerun_exporter import RerunExporter
 from egohub.schema import SchemaValidationError, Trajectory, validate_hdf5_with_schema
@@ -67,6 +68,7 @@ def discover_tasks() -> dict[str, type[BaseTask]]:
 # Registry maps for dynamically discovered classes
 ADAPTER_MAP = {
     "egodex": EgoDexAdapter,
+    "ho3d": HO3DAdapter,
 }
 BACKEND_MAP = discover_backends()
 TASK_MAP = discover_tasks()
