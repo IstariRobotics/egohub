@@ -101,7 +101,13 @@ class RerunExporter:
 
     def _create_blueprint(self, camera_names: List[str]) -> rrb.Blueprint:
         spatial2d_views = [
-            rrb.Spatial2DView(origin=f"world/cameras/{name}/image", name=f"{name} View")
+            rrb.Spatial2DView(origin=f"world/cameras/{name}/image", name=f"{name} RGB")
+            for name in camera_names
+        ]
+        depth_views = [
+            rrb.Spatial2DView(
+                origin=f"world/cameras/{name}/depth", name=f"{name} Depth"
+            )
             for name in camera_names
         ]
         return rrb.Blueprint(
@@ -109,7 +115,7 @@ class RerunExporter:
                 rrb.Spatial3DView(origin="world"),
                 rrb.Vertical(
                     rrb.TextDocumentView(origin="llm_description"),
-                    rrb.Tabs(*spatial2d_views),
+                    rrb.Tabs(*spatial2d_views, *depth_views),
                     row_shares=[1, 10],
                 ),
                 column_shares=[2, 1],
@@ -159,6 +165,17 @@ class RerunExporter:
 
             rr.log(
                 img_path,
+                rr.Pinhole(
+                    image_from_camera=intr,
+                    width=width,
+                    height=height,
+                    camera_xyz=rr.ViewCoordinates.RDF,
+                ),
+                static=True,
+            )
+            depth_img_path = f"world/cameras/{cam_key}/depth"
+            rr.log(
+                depth_img_path,
                 rr.Pinhole(
                     image_from_camera=intr,
                     width=width,
@@ -257,6 +274,23 @@ class RerunExporter:
                             image_np = np.rot90(image_np, k=3)  # rotate 90° CCW
 
                         rr.log(f"world/cameras/{cam_key}/image", rr.Image(image_np))
+            
+            depth_grp = cam_group.get("depth")
+            if isinstance(depth_grp, h5py.Group):
+                depth_dset = depth_grp.get("image_meters")
+                frame_indices_dset = depth_grp.get("frame_indices")
+                if (
+                    isinstance(depth_dset, h5py.Dataset)
+                    and isinstance(frame_indices_dset, h5py.Dataset)
+                ):
+                    frame_indices = frame_indices_dset[:]
+                    current_indices = np.where(frame_indices == frame_idx)[0]
+                    for idx in current_indices:
+                        depth_map = depth_dset[idx]
+                        rr.log(
+                            f"world/cameras/{cam_key}/depth",
+                            rr.DepthImage(depth_map, meter=1.0),
+                        )
 
     def _log_temporal_object_data(
         self, traj_group: h5py.Group, cam_keys: List[str], frame_idx: int
