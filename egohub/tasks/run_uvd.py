@@ -5,21 +5,21 @@ from typing import Literal
 
 import h5py
 import numpy as np
-import torch
 import rerun as rr
+import torch
 from PIL import Image
-from scipy.signal import medfilt, argrelextrema
+from scipy.signal import argrelextrema, medfilt
 from sklearn.manifold import TSNE
-from torchvision import transforms as T
+from torchvision import transforms
 from tqdm import tqdm
-from transformers import AutoProcessor, GitForCausalLM, BlipForConditionalGeneration
-
+from transformers import AutoProcessor, BlipForConditionalGeneration, GitForCausalLM
 
 # --- Model Loading (Re-implementing UVD's preprocessor logic) ---
 
+
 def get_preprocessor(
     name: Literal["dinov2", "vip"], device: str
-) -> tuple[torch.nn.Module, T.Compose]:
+) -> tuple[torch.nn.Module, transforms.Compose]:
     """
     Loads a pre-trained model and its corresponding pre-processing transform.
     This is a simplified re-implementation of the logic in the UVD library.
@@ -29,8 +29,9 @@ def get_preprocessor(
         # DINOv2 is loaded from torch.hub
         model = torch.hub.load("facebookresearch/dinov2", "dinov2_vitl14")
         model = model.to(device=device)
-        # The model's transform only handles normalization. Resizing must be done separately.
-        transform = T.Normalize(
+        # The model's transform only handles normalization.
+        # Resizing must be done separately.
+        transform = transforms.Normalize(
             mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
         )
         return model, transform
@@ -39,8 +40,8 @@ def get_preprocessor(
         # For this example, we'll raise a NotImplementedError and show what's needed.
         raise NotImplementedError(
             "Loading the 'vip' model requires the 'vip' library and its specific "
-            "model loading functions. This can be added by installing the library, e.g., "
-            "'pip install vip-pytorch'."
+            "model loading functions. This can be added by installing the library, "
+            "e.g., 'pip install vip-pytorch'."
         )
     else:
         raise NotImplementedError(f"Preprocessor '{name}' is not supported.")
@@ -48,29 +49,35 @@ def get_preprocessor(
 
 # --- HDF5 and Video Decoding ---
 
+
 def decode_video_from_hdf5(rgb_group: h5py.Group) -> np.ndarray:
     """Decodes a video from HDF5 raw bytes and converts it to a NumPy array."""
     image_bytes_dataset = rgb_group["image_bytes"]
     frame_sizes_dataset = rgb_group["frame_sizes"]
-    
+
     frames = []
     for i in range(len(frame_sizes_dataset)):
         frame_bytes = image_bytes_dataset[i, : frame_sizes_dataset[i]].tobytes()
         from io import BytesIO
+
         img = Image.open(BytesIO(frame_bytes)).convert("RGB")
         frames.append(np.array(img))
-    
+
     return np.stack(frames)
 
 
 # --- Subgoal Decomposition Logic ---
+
 
 def find_subgoals_by_derivative(
     embeddings: np.ndarray,
     derivative_threshold: float,
     window_length: int,
 ) -> tuple[list[int], np.ndarray]:
-    """Identifies subgoals from a sequence of embeddings based on the derivative of the distance curve."""
+    """
+    Identifies subgoals from a sequence of embeddings based on the derivative of
+    the distance curve.
+    """
     traj_length = embeddings.shape[0]
     subgoal_indices = []
     cur_subgoal_idx = traj_length - 1
@@ -93,21 +100,21 @@ def find_subgoals_by_derivative(
             if np.linalg.norm(embeddings[0] - embeddings[-1]) > 1e-6:
                 final_distances /= np.linalg.norm(embeddings[0] - embeddings[-1])
             return sorted(list(set(subgoal_indices))), final_distances
-        
+
         diffs = np.diff(significant_change_indices)
         break_indices = np.where(diffs > window_length + 1)[0]
         end_positions = significant_change_indices[
             np.concatenate((break_indices, [len(significant_change_indices) - 1]))
         ]
-        
+
         subgoal_indices.append(cur_subgoal_idx)
         if len(end_positions) < 2 or end_positions[-2] < 15:
             break
         cur_subgoal_idx = end_positions[-2]
-    
+
     if 0 not in subgoal_indices:
         subgoal_indices.append(0)
-    
+
     final_distances = np.linalg.norm(embeddings - embeddings[-1], axis=1)
     if np.linalg.norm(embeddings[0] - embeddings[-1]) > 1e-6:
         final_distances /= np.linalg.norm(embeddings[0] - embeddings[-1])
@@ -115,28 +122,29 @@ def find_subgoals_by_derivative(
 
 
 def find_subgoals_by_peaks(
-    embeddings: np.ndarray, 
-    min_interval: int
+    embeddings: np.ndarray, min_interval: int
 ) -> tuple[list[int], np.ndarray]:
     """Identifies subgoals by finding peaks in the distance curve."""
     traj_length = embeddings.shape[0]
     subgoal_indices = [traj_length - 1]
     cur_goal_idx = traj_length - 1
-    
+
     final_distances = np.linalg.norm(embeddings - embeddings[-1], axis=1)
     if np.linalg.norm(embeddings[0] - embeddings[-1]) > 1e-6:
         final_distances /= np.linalg.norm(embeddings[0] - embeddings[-1])
 
     while cur_goal_idx > min_interval:
-        distances = np.linalg.norm(embeddings[:cur_goal_idx] - embeddings[cur_goal_idx], axis=1)
+        distances = np.linalg.norm(
+            embeddings[:cur_goal_idx] - embeddings[cur_goal_idx], axis=1
+        )
         if np.linalg.norm(embeddings[0] - embeddings[cur_goal_idx]) > 1e-6:
             distances /= np.linalg.norm(embeddings[0] - embeddings[cur_goal_idx])
 
         smoothed_distances = medfilt(distances, kernel_size=None)
-        
+
         # Find local maxima (peaks)
         extrema_indices = argrelextrema(smoothed_distances, np.greater)[0]
-        
+
         updated = False
         for ex_idx in reversed(extrema_indices):
             if cur_goal_idx - ex_idx > min_interval and ex_idx > min_interval:
@@ -144,9 +152,9 @@ def find_subgoals_by_peaks(
                 subgoal_indices.append(cur_goal_idx)
                 updated = True
                 break
-        
+
         if not updated:
-            break # No more valid peaks found
+            break  # No more valid peaks found
 
     if 0 not in subgoal_indices:
         subgoal_indices.append(0)
@@ -155,7 +163,8 @@ def find_subgoals_by_peaks(
 
 # --- Main Task ---
 
-def run_uvd_on_hdf5(
+
+def run_uvd_on_hdf5(  # noqa: C901
     hdf5_path: Path,
     preprocessor_name: Literal["dinov2", "vip"],
     device: str,
@@ -198,7 +207,7 @@ def run_uvd_on_hdf5(
 
         for seq_name in tqdm(sequences_to_process, desc="Processing sequences"):
             traj_group = f[seq_name]
-            
+
             output_group_name = f"subgoals_{preprocessor_name}"
             if output_group_name in traj_group and not force_reprocess:
                 logging.info(f"Skipping '{seq_name}', data already exists.")
@@ -208,20 +217,26 @@ def run_uvd_on_hdf5(
                 del traj_group[output_group_name]
 
             if "cameras/default_camera/rgb" not in traj_group:
-                logging.warning(f"No RGB data found for sequence '{seq_name}'. Skipping.")
+                logging.warning(
+                    f"No RGB data found for sequence '{seq_name}'. Skipping."
+                )
                 continue
-            
+
             rgb_group = traj_group["cameras/default_camera/rgb"]
-            
+
             try:
                 # 1. Decode video
                 video_frames_np = decode_video_from_hdf5(rgb_group)
-                
+
                 # 2. Preprocess and Extract Embeddings
-                # Ensure all frames are resized to 224x224 before any other processing.
-                resize_transform = T.Resize((224, 224))
-                
-                video_tensor = torch.from_numpy(video_frames_np).permute(0, 3, 1, 2).float() / 255.0
+                # Ensure all frames are resized to 224x224 before any other
+                # processing.
+                resize_transform = transforms.Resize((224, 224))
+
+                video_tensor = (
+                    torch.from_numpy(video_frames_np).permute(0, 3, 1, 2).float()
+                    / 255.0
+                )
                 resized_video_tensor = resize_transform(video_tensor)
                 normalized_video_tensor = transform(resized_video_tensor).to(device)
 
@@ -230,9 +245,9 @@ def run_uvd_on_hdf5(
                     for frame in normalized_video_tensor:
                         embedding = model(frame.unsqueeze(0))
                         all_embeddings.append(embedding.cpu().numpy().squeeze())
-                
+
                 embeddings_np = np.array(all_embeddings)
-                
+
                 # 3. Find Subgoals
                 if decomp_method == "derivative":
                     subgoal_indices, distances = find_subgoals_by_derivative(
@@ -274,45 +289,65 @@ def run_uvd_on_hdf5(
                     # This logic handles both single-image (BLIP) and video (GIT) models
                     caption_processor = AutoProcessor.from_pretrained(captioning_model)
                     if "git" in captioning_model.lower():
-                        caption_model = GitForCausalLM.from_pretrained(captioning_model).to(device)
-                    else: # Default to BLIP-style models
-                        caption_model = BlipForConditionalGeneration.from_pretrained(captioning_model).to(device)
-                    
+                        caption_model = GitForCausalLM.from_pretrained(
+                            captioning_model
+                        ).to(device)
+                    else:  # Default to BLIP-style models
+                        caption_model = BlipForConditionalGeneration.from_pretrained(
+                            captioning_model
+                        ).to(device)
+
                     # --- Safeguard for video models ---
                     max_frames_for_model = num_caption_frames
                     if "git" in captioning_model.lower():
                         # The GIT model has a fixed number of temporal embeddings
-                        model_max_frames = caption_model.git.img_temperal_embedding.weight.shape[0]
+                        model_max_frames = (
+                            caption_model.git.img_temperal_embedding.weight.shape[0]
+                        )
                         if num_caption_frames > model_max_frames:
                             logging.warning(
-                                f"num_caption_frames ({num_caption_frames}) exceeds model max ({model_max_frames}). "
-                                f"Will use {model_max_frames} frames instead."
+                                f"num_caption_frames ({num_caption_frames}) exceeds "
+                                f"model max ({model_max_frames}). Will use "
+                                f"{model_max_frames} frames instead."
                             )
                             max_frames_for_model = model_max_frames
 
                     descriptions = []
                     boundaries = uvd_action_group["action_boundaries"][:]
-                    logging.info(f"Generating descriptions for {len(boundaries)} action segments...")
-                    
+                    logging.info(
+                        "Generating descriptions for "
+                        f"{len(boundaries)} action segments..."
+                    )
+
                     for start, end in tqdm(boundaries, desc="Generating Descriptions"):
                         # Sample frames evenly from the segment
-                        indices = np.linspace(start, end - 1, num=max_frames_for_model, dtype=int)
+                        indices = np.linspace(
+                            start, end - 1, num=max_frames_for_model, dtype=int
+                        )
                         segment_frames = [video_frames_np[i] for i in indices]
-                        
+
                         # Generate caption
-                        inputs = caption_processor(images=segment_frames, return_tensors="pt").to(device)
+                        inputs = caption_processor(
+                            images=segment_frames, return_tensors="pt"
+                        ).to(device)
                         pixel_values = inputs.pixel_values
-                        
-                        generated_ids = caption_model.generate(pixel_values=pixel_values, max_length=50)
-                        generated_caption = caption_processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
+
+                        generated_ids = caption_model.generate(
+                            pixel_values=pixel_values, max_length=50
+                        )
+                        generated_caption = caption_processor.batch_decode(
+                            generated_ids, skip_special_tokens=True
+                        )[0].strip()
                         descriptions.append(generated_caption)
-                    
+
                     # Save descriptions to HDF5
                     if "action_descriptions" in uvd_action_group:
                         del uvd_action_group["action_descriptions"]
                     uvd_action_group.create_dataset(
                         "action_descriptions",
-                        data=np.array(descriptions, dtype=h5py.string_dtype(encoding='utf-8')),
+                        data=np.array(
+                            descriptions, dtype=h5py.string_dtype(encoding="utf-8")
+                        ),
                     )
                     logging.info("Saved action descriptions to HDF5.")
 
@@ -321,24 +356,47 @@ def run_uvd_on_hdf5(
                     logging.info("Running t-SNE on embeddings...")
                     # Create labels based on subgoal segments
                     labels = np.zeros(len(embeddings_np), dtype=np.int32)
-                    for i, (start, end) in enumerate(zip(subgoal_indices[:-1], subgoal_indices[1:])):
+                    for i, (start, end) in enumerate(
+                        zip(subgoal_indices[:-1], subgoal_indices[1:])
+                    ):
                         labels[start:end] = i
                     labels[subgoal_indices[-1]:] = len(subgoal_indices) - 1
 
                     # 3D t-SNE
                     tsne_3d = TSNE(n_components=3, random_state=42, n_jobs=-1)
                     embedding_3d = tsne_3d.fit_transform(embeddings_np)
-                    rr.log( "world/tsne_3d", rr.Points3D(embedding_3d, class_ids=labels), static=True)
-                    
+                    rr.log(
+                        "world/tsne_3d",
+                        rr.Points3D(embedding_3d, class_ids=labels),
+                        static=True,
+                    )
+
                     # Log an annotation context for the labels
-                    class_descriptions = [rr.ClassDescription(info=rr.AnnotationInfo(id=i, label=f"Segment {i}")) for i in range(len(subgoal_indices))]
-                    rr.log("world/tsne_3d", rr.AnnotationContext(class_descriptions), static=True)
+                    class_descriptions = [
+                        rr.ClassDescription(
+                            info=rr.AnnotationInfo(id=i, label=f"Segment {i}")
+                        )
+                        for i in range(len(subgoal_indices))
+                    ]
+                    rr.log(
+                        "world/tsne_3d",
+                        rr.AnnotationContext(class_descriptions),
+                        static=True,
+                    )
 
                     # 2D t-SNE
                     tsne_2d = TSNE(n_components=2, random_state=42, n_jobs=-1)
                     embedding_2d = tsne_2d.fit_transform(embeddings_np)
-                    rr.log("plots/tsne_2d", rr.Points2D(embedding_2d, class_ids=labels), static=True)
-                    rr.log("plots/tsne_2d", rr.AnnotationContext(class_descriptions), static=True)
+                    rr.log(
+                        "plots/tsne_2d",
+                        rr.Points2D(embedding_2d, class_ids=labels),
+                        static=True,
+                    )
+                    rr.log(
+                        "plots/tsne_2d",
+                        rr.AnnotationContext(class_descriptions),
+                        static=True,
+                    )
                     logging.info("Logged 2D and 3D t-SNE plots to Rerun.")
 
                 # --- 7. Log Video and Subgoals to Rerun if requested ---
@@ -347,12 +405,12 @@ def run_uvd_on_hdf5(
                     for i, frame in enumerate(video_frames_np):
                         rr.set_time("frame", i)
                         rr.log("video/rgb", rr.Image(frame).compress(jpeg_quality=75))
-                    
+
                     # Log the distance curve
                     for i, d in enumerate(distances):
                         rr.set_time("frame", i)
                         rr.log("diagnostics/distance_to_final_goal", rr.Scalars(d))
-                    
+
                     # Log subgoal markers
                     for idx in subgoal_indices:
                         rr.set_time("frame", idx)
@@ -361,7 +419,9 @@ def run_uvd_on_hdf5(
                             rr.TextDocument(f"Subgoal @ {idx}"),
                             rr.components.Color(rgba=[0, 255, 0]),
                         )
-                    logging.info(f"Logged video and subgoal markers to Rerun for '{seq_name}'.")
+                    logging.info(
+                        f"Logged video and subgoal markers to Rerun for '{seq_name}'."
+                    )
 
                 # 5. Visualize if requested
                 if visualize_subgoals:
@@ -370,10 +430,14 @@ def run_uvd_on_hdf5(
                     for i, frame_idx in enumerate(subgoal_indices):
                         img = Image.fromarray(video_frames_np[frame_idx])
                         img.save(vis_dir / f"subgoal_{i:03d}_frame_{frame_idx:04d}.jpg")
-                    logging.info(f"Saved {len(subgoal_indices)} subgoal images to {vis_dir}")
+                    logging.info(
+                        f"Saved {len(subgoal_indices)} subgoal images to {vis_dir}"
+                    )
 
             except Exception as e:
-                logging.error(f"Failed to process sequence '{seq_name}': {e}", exc_info=True)
+                logging.error(
+                    f"Failed to process sequence '{seq_name}': {e}", exc_info=True
+                )
 
 
 def main():
@@ -390,7 +454,10 @@ def main():
         "--sequence-name",
         type=str,
         default=None,
-        help="Specify a single sequence to process. If not provided, all sequences are processed.",
+        help=(
+            "Specify a single sequence to process. If not provided, all sequences "
+            "are processed."
+        ),
     )
     parser.add_argument(
         "--decomp-method",
@@ -403,13 +470,19 @@ def main():
         "--derivative-threshold",
         type=float,
         default=1e-3,
-        help="Sensitivity for detecting significant scene changes (for 'derivative' method).",
+        help=(
+            "Sensitivity for detecting significant scene changes (for 'derivative' "
+            "method)."
+        ),
     )
     parser.add_argument(
         "--window-length",
         type=int,
         default=11,
-        help="Minimum number of stable frames to define a subgoal boundary (for 'derivative' method).",
+        help=(
+            "Minimum number of stable frames to define a subgoal boundary (for "
+            "'derivative' method)."
+        ),
     )
     parser.add_argument(
         "--min-peak-interval",
@@ -436,7 +509,10 @@ def main():
         "--save-to-rerun",
         type=Path,
         default=None,
-        help="Save the Rerun visualization to an RRD file instead of spawning a live viewer.",
+        help=(
+            "Save the Rerun visualization to an RRD file instead of spawning a "
+            "live viewer."
+        ),
     )
     parser.add_argument(
         "--device",
@@ -464,9 +540,12 @@ def main():
         "--num-caption-frames",
         type=int,
         default=5,
-        help="Number of frames to sample from each action segment for video captioning.",
+        help=(
+            "Number of frames to sample from each action segment for video "
+            "captioning."
+        ),
     )
-    
+
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
     run_uvd_on_hdf5(
@@ -490,4 +569,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    main()
