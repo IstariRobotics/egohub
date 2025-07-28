@@ -6,10 +6,13 @@ from typing import Literal
 import h5py
 import numpy as np
 import torch
+import rerun as rr
 from PIL import Image
 from scipy.signal import medfilt, argrelextrema
+from sklearn.manifold import TSNE
 from torchvision import transforms as T
 from tqdm import tqdm
+from transformers import AutoProcessor, GitForCausalLM, BlipForConditionalGeneration
 
 
 # --- Model Loading (Re-implementing UVD's preprocessor logic) ---
@@ -162,11 +165,24 @@ def run_uvd_on_hdf5(
     window_length: int = 11,
     min_peak_interval: int = 15,
     visualize_subgoals: bool = False,
+    visualize_tsne: bool = False,
+    log_to_rerun: bool = False,
+    save_to_rerun: Path | None = None,
     force_reprocess: bool = False,
+    generate_descriptions: bool = False,
+    captioning_model: str = "microsoft/git-base-vatex",
+    num_caption_frames: int = 5,
 ):
     """
     Runs the full UVD pipeline on an HDF5 file.
     """
+    if log_to_rerun or visualize_tsne:
+        if save_to_rerun:
+            rr.init("UVD Subgoal Analysis", spawn=False)
+            rr.save(str(save_to_rerun))
+        else:
+            rr.init("UVD Subgoal Analysis", spawn=True)
+
     logging.info(f"Starting UVD processing on {hdf5_path} using '{preprocessor_name}'")
     model, transform = get_preprocessor(preprocessor_name, device)
     model.eval()
@@ -252,6 +268,101 @@ def run_uvd_on_hdf5(
                         "action_boundaries", data=boundaries, dtype=np.int32
                     )
 
+                # --- 5. Generate Semantic Descriptions if requested ---
+                if generate_descriptions:
+                    logging.info(f"Loading captioning model: {captioning_model}...")
+                    # This logic handles both single-image (BLIP) and video (GIT) models
+                    caption_processor = AutoProcessor.from_pretrained(captioning_model)
+                    if "git" in captioning_model.lower():
+                        caption_model = GitForCausalLM.from_pretrained(captioning_model).to(device)
+                    else: # Default to BLIP-style models
+                        caption_model = BlipForConditionalGeneration.from_pretrained(captioning_model).to(device)
+                    
+                    # --- Safeguard for video models ---
+                    max_frames_for_model = num_caption_frames
+                    if "git" in captioning_model.lower():
+                        # The GIT model has a fixed number of temporal embeddings
+                        model_max_frames = caption_model.git.img_temperal_embedding.weight.shape[0]
+                        if num_caption_frames > model_max_frames:
+                            logging.warning(
+                                f"num_caption_frames ({num_caption_frames}) exceeds model max ({model_max_frames}). "
+                                f"Will use {model_max_frames} frames instead."
+                            )
+                            max_frames_for_model = model_max_frames
+
+                    descriptions = []
+                    boundaries = uvd_action_group["action_boundaries"][:]
+                    logging.info(f"Generating descriptions for {len(boundaries)} action segments...")
+                    
+                    for start, end in tqdm(boundaries, desc="Generating Descriptions"):
+                        # Sample frames evenly from the segment
+                        indices = np.linspace(start, end - 1, num=max_frames_for_model, dtype=int)
+                        segment_frames = [video_frames_np[i] for i in indices]
+                        
+                        # Generate caption
+                        inputs = caption_processor(images=segment_frames, return_tensors="pt").to(device)
+                        pixel_values = inputs.pixel_values
+                        
+                        generated_ids = caption_model.generate(pixel_values=pixel_values, max_length=50)
+                        generated_caption = caption_processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
+                        descriptions.append(generated_caption)
+                    
+                    # Save descriptions to HDF5
+                    if "action_descriptions" in uvd_action_group:
+                        del uvd_action_group["action_descriptions"]
+                    uvd_action_group.create_dataset(
+                        "action_descriptions",
+                        data=np.array(descriptions, dtype=h5py.string_dtype(encoding='utf-8')),
+                    )
+                    logging.info("Saved action descriptions to HDF5.")
+
+                # --- 6. Run and Log t-SNE Visualization if requested ---
+                if visualize_tsne:
+                    logging.info("Running t-SNE on embeddings...")
+                    # Create labels based on subgoal segments
+                    labels = np.zeros(len(embeddings_np), dtype=np.int32)
+                    for i, (start, end) in enumerate(zip(subgoal_indices[:-1], subgoal_indices[1:])):
+                        labels[start:end] = i
+                    labels[subgoal_indices[-1]:] = len(subgoal_indices) - 1
+
+                    # 3D t-SNE
+                    tsne_3d = TSNE(n_components=3, random_state=42, n_jobs=-1)
+                    embedding_3d = tsne_3d.fit_transform(embeddings_np)
+                    rr.log( "world/tsne_3d", rr.Points3D(embedding_3d, class_ids=labels), static=True)
+                    
+                    # Log an annotation context for the labels
+                    class_descriptions = [rr.ClassDescription(info=rr.AnnotationInfo(id=i, label=f"Segment {i}")) for i in range(len(subgoal_indices))]
+                    rr.log("world/tsne_3d", rr.AnnotationContext(class_descriptions), static=True)
+
+                    # 2D t-SNE
+                    tsne_2d = TSNE(n_components=2, random_state=42, n_jobs=-1)
+                    embedding_2d = tsne_2d.fit_transform(embeddings_np)
+                    rr.log("plots/tsne_2d", rr.Points2D(embedding_2d, class_ids=labels), static=True)
+                    rr.log("plots/tsne_2d", rr.AnnotationContext(class_descriptions), static=True)
+                    logging.info("Logged 2D and 3D t-SNE plots to Rerun.")
+
+                # --- 7. Log Video and Subgoals to Rerun if requested ---
+                if log_to_rerun:
+                    # Log the video frames over time
+                    for i, frame in enumerate(video_frames_np):
+                        rr.set_time("frame", i)
+                        rr.log("video/rgb", rr.Image(frame).compress(jpeg_quality=75))
+                    
+                    # Log the distance curve
+                    for i, d in enumerate(distances):
+                        rr.set_time("frame", i)
+                        rr.log("diagnostics/distance_to_final_goal", rr.Scalars(d))
+                    
+                    # Log subgoal markers
+                    for idx in subgoal_indices:
+                        rr.set_time("frame", idx)
+                        rr.log(
+                            "timeline/subgoals",
+                            rr.TextDocument(f"Subgoal @ {idx}"),
+                            rr.components.Color(rgba=[0, 255, 0]),
+                        )
+                    logging.info(f"Logged video and subgoal markers to Rerun for '{seq_name}'.")
+
                 # 5. Visualize if requested
                 if visualize_subgoals:
                     vis_dir = hdf5_path.parent / "subgoal_visualizations" / seq_name
@@ -312,6 +423,22 @@ def main():
         help="Save the subgoal frames as images for inspection.",
     )
     parser.add_argument(
+        "--visualize-tsne",
+        action="store_true",
+        help="Compute and log a t-SNE visualization of the embeddings.",
+    )
+    parser.add_argument(
+        "--log-to-rerun",
+        action="store_true",
+        help="Log the video and subgoal markers to a Rerun viewer.",
+    )
+    parser.add_argument(
+        "--save-to-rerun",
+        type=Path,
+        default=None,
+        help="Save the Rerun visualization to an RRD file instead of spawning a live viewer.",
+    )
+    parser.add_argument(
         "--device",
         type=str,
         default="cuda" if torch.cuda.is_available() else "cpu",
@@ -321,6 +448,23 @@ def main():
         "--force",
         action="store_true",
         help="Force reprocessing of sequences.",
+    )
+    parser.add_argument(
+        "--generate-descriptions",
+        action="store_true",
+        help="Enable generation of semantic descriptions for each action segment.",
+    )
+    parser.add_argument(
+        "--captioning-model",
+        type=str,
+        default="microsoft/git-base-vatex",
+        help="The Hugging Face model to use for image or video captioning.",
+    )
+    parser.add_argument(
+        "--num-caption-frames",
+        type=int,
+        default=5,
+        help="Number of frames to sample from each action segment for video captioning.",
     )
     
     args = parser.parse_args()
@@ -335,7 +479,13 @@ def main():
         args.window_length,
         args.min_peak_interval,
         args.visualize_subgoals,
+        args.visualize_tsne,
+        args.log_to_rerun,
+        args.save_to_rerun,
         args.force,
+        args.generate_descriptions,
+        args.captioning_model,
+        args.num_caption_frames,
     )
 
 
