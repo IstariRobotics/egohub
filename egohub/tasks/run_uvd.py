@@ -1,7 +1,7 @@
 import argparse
 import logging
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 
 import h5py
 import numpy as np
@@ -231,7 +231,7 @@ def run_uvd_on_hdf5(  # noqa: C901
     hdf5_path: Path,
     preprocessor_name: Literal["dinov2", "vip"],
     device: str,
-    sequence_name: str | None = None,
+    sequence_name: Optional[str] = None,
     decomp_method: Literal["derivative", "peaks"] = "derivative",
     derivative_threshold: float = 1e-3,
     window_length: int = 11,
@@ -239,7 +239,7 @@ def run_uvd_on_hdf5(  # noqa: C901
     visualize_subgoals: bool = False,
     visualize_tsne: bool = False,
     log_to_rerun: bool = False,
-    save_to_rerun: Path | None = None,
+    save_to_rerun: Optional[Path] = None,
     force_reprocess: bool = False,
     generate_descriptions: bool = False,
     captioning_model: str = "microsoft/git-base-vatex",
@@ -278,9 +278,9 @@ def run_uvd_on_hdf5(  # noqa: C901
                 output_group_name = f"subgoals_{preprocessor_name}"
                 if output_group_name not in traj_group:
                     logging.error(
-                        f"Cannot generate descriptions for '{seq_name}' because subgoal "
-                        f"group '{output_group_name}' does not exist. Run the full "
-                        "pipeline first."
+                        f"Cannot generate descriptions for '{seq_name}' because "
+                        f"subgoal group '{output_group_name}' does not exist. Run "
+                        "the full pipeline first."
                     )
                     continue
 
@@ -455,7 +455,8 @@ def run_uvd_on_hdf5(  # noqa: C901
                                 f"diagnostics/distance_to_final_goal/{i}", rr.Scalars(d)
                             )
 
-                        # Log subgoal markers as text entries if descriptions are available
+                        # Log subgoal markers as text entries
+                        # if descriptions are available
                         if generate_descriptions:
                             descriptions = uvd_action_group["action_descriptions"][:]
                             boundaries = uvd_action_group["action_boundaries"][:]
@@ -476,7 +477,8 @@ def run_uvd_on_hdf5(  # noqa: C901
                                     rr.components.Color(rgba=[0, 255, 0]),
                                 )
                         logging.info(
-                            f"Logged video and subgoal markers to Rerun for '{seq_name}'."
+                            "Logged video and subgoal markers to Rerun for "
+                            f"'{seq_name}'."
                         )
 
                     # 5. Visualize if requested
