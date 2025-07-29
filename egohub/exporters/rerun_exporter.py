@@ -377,7 +377,7 @@ class RerunExporter:
     def _log_uvd_results(
         self, traj_group: h5py.Group, cam_keys: List[str], frame_idx: int
     ):
-        """Logs UVD action boundaries as vertical lines on the 2D image."""
+        """Logs UVD action descriptions to the timeline."""
         uvd_group = traj_group.get("actions/uvd")
         if not isinstance(uvd_group, h5py.Group):
             return
@@ -387,37 +387,20 @@ class RerunExporter:
             return
 
         boundaries = boundaries_dset[:]
-        is_boundary_frame = any(
-            frame_idx == start or frame_idx == end for start, end in boundaries
-        )
+        descriptions_dset = uvd_group.get("action_descriptions")
 
-        if is_boundary_frame and cam_keys:
-            # Get image dimensions to draw the line across the full height
-            cam_group = traj_group.get(f"cameras/{cam_keys[0]}")
-            height = 1080  # Default
-            if isinstance(cam_group, h5py.Group):
-                rgb_grp = cam_group.get("rgb")
-                if isinstance(rgb_grp, h5py.Group):
-                    image_bytes = rgb_grp.get("image_bytes")
-                    if isinstance(image_bytes, h5py.Dataset) and len(image_bytes) > 0:
-                        encoded_frame = image_bytes[0]
-                        image = Image.open(io.BytesIO(encoded_frame))
-                        width, height = image.size
-                        if height > width:  # Portrait
-                            height, width = width, height
+        for i, (start, _) in enumerate(boundaries):
+            if frame_idx == start:
+                description_text = f"Action segment {i+1} starts"
+                if descriptions_dset is not None and i < len(descriptions_dset):
+                    description = descriptions_dset[i]
+                    if isinstance(description, bytes):
+                        description_text = description.decode("utf-8")
+                    else:
+                        description_text = str(description)
 
-            # Log a vertical line on each camera view
-            for cam_key in cam_keys:
-                img_path = f"world/cameras/{cam_key}/image"
-                rr.log(
-                    f"{img_path}/uvd_boundary",
-                    rr.LineStrips2D(
-                        [[(frame_idx, 0), (frame_idx, height)]],
-                        colors=[(255, 0, 0)],  # Red line
-                        radii=[2],
-                        labels=["Action Boundary"],
-                    ),
-                )
+                # The user requested to log to "action/events"
+                rr.log("action/events", rr.TextLog(text=description_text))
 
     def _confidence_scores_to_rgb(self, confidence_scores: np.ndarray) -> np.ndarray:
         """Converts confidence scores (0-1) to RGB colors for visualization."""

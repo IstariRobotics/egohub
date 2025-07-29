@@ -161,6 +161,77 @@ def find_subgoals_by_peaks(
     return sorted(list(set(subgoal_indices))), final_distances
 
 
+def _generate_and_save_descriptions(
+    traj_group: h5py.Group,
+    video_frames_np: np.ndarray,
+    captioning_model: str,
+    num_caption_frames: int,
+    device: str,
+):
+    """Generates and saves semantic descriptions for action segments."""
+    logging.info(f"Loading captioning model: {captioning_model}...")
+    uvd_action_group = traj_group.require_group("actions/uvd")
+
+    # This logic handles both single-image (BLIP) and video (GIT) models
+    caption_processor = AutoProcessor.from_pretrained(captioning_model)
+    if "git" in captioning_model.lower():
+        caption_model = GitForCausalLM.from_pretrained(captioning_model).to(device)
+    else:  # Default to BLIP-style models
+        caption_model = BlipForConditionalGeneration.from_pretrained(
+            captioning_model
+        ).to(device)
+
+    # --- Safeguard for video models ---
+    max_frames_for_model = num_caption_frames
+    if "git" in captioning_model.lower():
+        model_max_frames = len(caption_model.git.img_temperal_embedding)
+        if num_caption_frames > model_max_frames:
+            logging.warning(
+                f"num_caption_frames ({num_caption_frames}) exceeds "
+                f"model max ({model_max_frames}). Will use "
+                f"{model_max_frames} frames instead."
+            )
+            max_frames_for_model = model_max_frames
+
+    descriptions = []
+    boundaries = uvd_action_group["action_boundaries"][:]
+    logging.info(
+        f"Generating descriptions for {len(boundaries)} action segments..."
+    )
+
+    for start, end in tqdm(boundaries, desc="Generating Descriptions"):
+        # Sample frames evenly from the segment
+        indices = np.linspace(
+            start, end - 1, num=max_frames_for_model, dtype=int
+        )
+        segment_frames = [video_frames_np[i] for i in indices]
+
+        # Generate caption
+        inputs = caption_processor(
+            images=segment_frames, return_tensors="pt"
+        ).to(device)
+        pixel_values = inputs.pixel_values
+
+        generated_ids = caption_model.generate(
+            pixel_values=pixel_values, max_length=50
+        )
+        generated_caption = caption_processor.batch_decode(
+            generated_ids, skip_special_tokens=True
+        )[0].strip()
+        descriptions.append(generated_caption)
+
+    # Save descriptions to HDF5
+    if "action_descriptions" in uvd_action_group:
+        del uvd_action_group["action_descriptions"]
+    uvd_action_group.create_dataset(
+        "action_descriptions",
+        data=np.array(
+            descriptions, dtype=h5py.string_dtype(encoding="utf-8")
+        ),
+    )
+    logging.info("Saved action descriptions to HDF5.")
+
+
 # --- Main Task ---
 
 
@@ -181,6 +252,7 @@ def run_uvd_on_hdf5(  # noqa: C901
     generate_descriptions: bool = False,
     captioning_model: str = "microsoft/git-base-vatex",
     num_caption_frames: int = 5,
+    only_generate_descriptions: bool = False,
 ):
     """
     Runs the full UVD pipeline on an HDF5 file.
@@ -208,236 +280,216 @@ def run_uvd_on_hdf5(  # noqa: C901
         for seq_name in tqdm(sequences_to_process, desc="Processing sequences"):
             traj_group = f[seq_name]
 
-            output_group_name = f"subgoals_{preprocessor_name}"
-            if output_group_name in traj_group and not force_reprocess:
-                logging.info(f"Skipping '{seq_name}', data already exists.")
-                continue
+            # --- Dispatch to the correct processing mode ---
+            if only_generate_descriptions:
+                # Mode 1: Only generate descriptions
+                output_group_name = f"subgoals_{preprocessor_name}"
+                if output_group_name not in traj_group:
+                    logging.error(
+                        f"Cannot generate descriptions for '{seq_name}' because subgoal "
+                        f"group '{output_group_name}' does not exist. Run the full "
+                        "pipeline first."
+                    )
+                    continue
 
-            if output_group_name in traj_group:
-                del traj_group[output_group_name]
+                if "cameras/default_camera/rgb" not in traj_group:
+                    logging.warning(
+                        f"No RGB data found for sequence '{seq_name}'. Skipping."
+                    )
+                    continue
 
-            if "cameras/default_camera/rgb" not in traj_group:
-                logging.warning(
-                    f"No RGB data found for sequence '{seq_name}'. Skipping."
+                logging.info(f"Generating descriptions for '{seq_name}'...")
+                video_frames_np = decode_video_from_hdf5(
+                    traj_group["cameras/default_camera/rgb"]
                 )
-                continue
-
-            rgb_group = traj_group["cameras/default_camera/rgb"]
-
-            try:
-                # 1. Decode video
-                video_frames_np = decode_video_from_hdf5(rgb_group)
-
-                # 2. Preprocess and Extract Embeddings
-                # Ensure all frames are resized to 224x224 before any other
-                # processing.
-                resize_transform = transforms.Resize((224, 224))
-
-                video_tensor = (
-                    torch.from_numpy(video_frames_np).permute(0, 3, 1, 2).float()
-                    / 255.0
+                _generate_and_save_descriptions(
+                    traj_group=traj_group,
+                    video_frames_np=video_frames_np,
+                    captioning_model=captioning_model,
+                    num_caption_frames=num_caption_frames,
+                    device=device,
                 )
-                resized_video_tensor = resize_transform(video_tensor)
-                normalized_video_tensor = transform(resized_video_tensor).to(device)
+            else:
+                # --- Mode 2: Full processing pipeline ---
+                output_group_name = f"subgoals_{preprocessor_name}"
+                if output_group_name in traj_group and not force_reprocess:
+                    logging.info(f"Skipping '{seq_name}', data already exists.")
+                    continue
 
-                all_embeddings = []
-                with torch.no_grad():
-                    for frame in normalized_video_tensor:
-                        embedding = model(frame.unsqueeze(0))
-                        all_embeddings.append(embedding.cpu().numpy().squeeze())
+                if output_group_name in traj_group:
+                    del traj_group[output_group_name]
 
-                embeddings_np = np.array(all_embeddings)
-
-                # 3. Find Subgoals
-                if decomp_method == "derivative":
-                    subgoal_indices, distances = find_subgoals_by_derivative(
-                        embeddings_np,
-                        derivative_threshold=derivative_threshold,
-                        window_length=window_length,
+                if "cameras/default_camera/rgb" not in traj_group:
+                    logging.warning(
+                        f"No RGB data found for sequence '{seq_name}'. Skipping."
                     )
-                elif decomp_method == "peaks":
-                    subgoal_indices, distances = find_subgoals_by_peaks(
-                        embeddings_np,
-                        min_interval=min_peak_interval,
+                    continue
+
+                rgb_group = traj_group["cameras/default_camera/rgb"]
+
+                try:
+                    # 1. Decode video
+                    video_frames_np = decode_video_from_hdf5(rgb_group)
+
+                    # 2. Preprocess and Extract Embeddings
+                    # Ensure all frames are resized to 224x224 before any other
+                    # processing.
+                    resize_transform = transforms.Resize((224, 224))
+
+                    video_tensor = (
+                        torch.from_numpy(video_frames_np).permute(0, 3, 1, 2).float()
+                        / 255.0
                     )
-                else:
-                    raise ValueError(f"Unknown decomposition method: {decomp_method}")
+                    resized_video_tensor = resize_transform(video_tensor)
+                    normalized_video_tensor = transform(resized_video_tensor).to(device)
 
-                # 4. Save Results
-                subgoals_group = traj_group.create_group(output_group_name)
-                subgoals_group.create_dataset(
-                    "indices", data=np.array(subgoal_indices, dtype=np.int32)
-                )
-                logging.info(f"Saved {len(subgoal_indices)} subgoals for '{seq_name}'.")
+                    all_embeddings = []
+                    with torch.no_grad():
+                        for frame in normalized_video_tensor:
+                            embedding = model(frame.unsqueeze(0))
+                            all_embeddings.append(embedding.cpu().numpy().squeeze())
 
-                # 4b. Create UVD action boundaries for visualization
-                uvd_action_group = traj_group.require_group("actions/uvd")
-                # Build (start, end) pairs from consecutive subgoal indices
-                if len(subgoal_indices) > 1:
-                    boundaries = np.column_stack(
-                        (subgoal_indices[:-1], subgoal_indices[1:])
-                    ).astype(np.int32)
-                    if "action_boundaries" in uvd_action_group:
-                        del uvd_action_group["action_boundaries"]
-                    uvd_action_group.create_dataset(
-                        "action_boundaries", data=boundaries, dtype=np.int32
-                    )
+                    embeddings_np = np.array(all_embeddings)
 
-                # --- 5. Generate Semantic Descriptions if requested ---
-                if generate_descriptions:
-                    logging.info(f"Loading captioning model: {captioning_model}...")
-                    # This logic handles both single-image (BLIP) and video (GIT) models
-                    caption_processor = AutoProcessor.from_pretrained(captioning_model)
-                    if "git" in captioning_model.lower():
-                        caption_model = GitForCausalLM.from_pretrained(
-                            captioning_model
-                        ).to(device)
-                    else:  # Default to BLIP-style models
-                        caption_model = BlipForConditionalGeneration.from_pretrained(
-                            captioning_model
-                        ).to(device)
-
-                    # --- Safeguard for video models ---
-                    max_frames_for_model = num_caption_frames
-                    if "git" in captioning_model.lower():
-                        # The GIT model has a fixed number of temporal embeddings
-                        model_max_frames = (
-                            caption_model.git.img_temperal_embedding.weight.shape[0]
+                    # 3. Find Subgoals
+                    if decomp_method == "derivative":
+                        subgoal_indices, distances = find_subgoals_by_derivative(
+                            embeddings_np,
+                            derivative_threshold=derivative_threshold,
+                            window_length=window_length,
                         )
-                        if num_caption_frames > model_max_frames:
-                            logging.warning(
-                                f"num_caption_frames ({num_caption_frames}) exceeds "
-                                f"model max ({model_max_frames}). Will use "
-                                f"{model_max_frames} frames instead."
-                            )
-                            max_frames_for_model = model_max_frames
-
-                    descriptions = []
-                    boundaries = uvd_action_group["action_boundaries"][:]
-                    logging.info(
-                        "Generating descriptions for "
-                        f"{len(boundaries)} action segments..."
-                    )
-
-                    for start, end in tqdm(boundaries, desc="Generating Descriptions"):
-                        # Sample frames evenly from the segment
-                        indices = np.linspace(
-                            start, end - 1, num=max_frames_for_model, dtype=int
+                    elif decomp_method == "peaks":
+                        subgoal_indices, distances = find_subgoals_by_peaks(
+                            embeddings_np,
+                            min_interval=min_peak_interval,
                         )
-                        segment_frames = [video_frames_np[i] for i in indices]
+                    else:
+                        raise ValueError(f"Unknown decomposition method: {decomp_method}")
 
-                        # Generate caption
-                        inputs = caption_processor(
-                            images=segment_frames, return_tensors="pt"
-                        ).to(device)
-                        pixel_values = inputs.pixel_values
+                    # 4. Save Results
+                    subgoals_group = traj_group.create_group(output_group_name)
+                    subgoals_group.create_dataset(
+                        "indices", data=np.array(subgoal_indices, dtype=np.int32)
+                    )
+                    logging.info(f"Saved {len(subgoal_indices)} subgoals for '{seq_name}'.")
 
-                        generated_ids = caption_model.generate(
-                            pixel_values=pixel_values, max_length=50
+                    # 4b. Create UVD action boundaries for visualization
+                    uvd_action_group = traj_group.require_group("actions/uvd")
+                    # Build (start, end) pairs from consecutive subgoal indices
+                    if len(subgoal_indices) > 1:
+                        boundaries = np.column_stack(
+                            (subgoal_indices[:-1], subgoal_indices[1:])
+                        ).astype(np.int32)
+                        if "action_boundaries" in uvd_action_group:
+                            del uvd_action_group["action_boundaries"]
+                        uvd_action_group.create_dataset(
+                            "action_boundaries", data=boundaries, dtype=np.int32
                         )
-                        generated_caption = caption_processor.batch_decode(
-                            generated_ids, skip_special_tokens=True
-                        )[0].strip()
-                        descriptions.append(generated_caption)
 
-                    # Save descriptions to HDF5
-                    if "action_descriptions" in uvd_action_group:
-                        del uvd_action_group["action_descriptions"]
-                    uvd_action_group.create_dataset(
-                        "action_descriptions",
-                        data=np.array(
-                            descriptions, dtype=h5py.string_dtype(encoding="utf-8")
-                        ),
-                    )
-                    logging.info("Saved action descriptions to HDF5.")
-
-                # --- 6. Run and Log t-SNE Visualization if requested ---
-                if visualize_tsne:
-                    logging.info("Running t-SNE on embeddings...")
-                    # Create labels based on subgoal segments
-                    labels = np.zeros(len(embeddings_np), dtype=np.int32)
-                    for i, (start, end) in enumerate(
-                        zip(subgoal_indices[:-1], subgoal_indices[1:])
-                    ):
-                        labels[start:end] = i
-                    labels[subgoal_indices[-1]:] = len(subgoal_indices) - 1
-
-                    # 3D t-SNE
-                    tsne_3d = TSNE(n_components=3, random_state=42, n_jobs=-1)
-                    embedding_3d = tsne_3d.fit_transform(embeddings_np)
-                    rr.log(
-                        "world/tsne_3d",
-                        rr.Points3D(embedding_3d, class_ids=labels),
-                        static=True,
-                    )
-
-                    # Log an annotation context for the labels
-                    class_descriptions = [
-                        rr.ClassDescription(
-                            info=rr.AnnotationInfo(id=i, label=f"Segment {i}")
+                    # --- 5. Generate Semantic Descriptions if requested ---
+                    if generate_descriptions:
+                        _generate_and_save_descriptions(
+                            traj_group=traj_group,
+                            video_frames_np=video_frames_np,
+                            captioning_model=captioning_model,
+                            num_caption_frames=num_caption_frames,
+                            device=device,
                         )
-                        for i in range(len(subgoal_indices))
-                    ]
-                    rr.log(
-                        "world/tsne_3d",
-                        rr.AnnotationContext(class_descriptions),
-                        static=True,
-                    )
 
-                    # 2D t-SNE
-                    tsne_2d = TSNE(n_components=2, random_state=42, n_jobs=-1)
-                    embedding_2d = tsne_2d.fit_transform(embeddings_np)
-                    rr.log(
-                        "plots/tsne_2d",
-                        rr.Points2D(embedding_2d, class_ids=labels),
-                        static=True,
-                    )
-                    rr.log(
-                        "plots/tsne_2d",
-                        rr.AnnotationContext(class_descriptions),
-                        static=True,
-                    )
-                    logging.info("Logged 2D and 3D t-SNE plots to Rerun.")
+                    # --- 6. Run and Log t-SNE Visualization if requested ---
+                    if visualize_tsne:
+                        logging.info("Running t-SNE on embeddings...")
+                        # Create labels based on subgoal segments
+                        labels = np.zeros(len(embeddings_np), dtype=np.int32)
+                        for i, (start, end) in enumerate(
+                            zip(subgoal_indices[:-1], subgoal_indices[1:])
+                        ):
+                            labels[start:end] = i
+                        labels[subgoal_indices[-1]:] = len(subgoal_indices) - 1
 
-                # --- 7. Log Video and Subgoals to Rerun if requested ---
-                if log_to_rerun:
-                    # Log the video frames over time
-                    for i, frame in enumerate(video_frames_np):
-                        rr.set_time("frame", i)
-                        rr.log("video/rgb", rr.Image(frame).compress(jpeg_quality=75))
-
-                    # Log the distance curve
-                    for i, d in enumerate(distances):
-                        rr.set_time("frame", i)
-                        rr.log("diagnostics/distance_to_final_goal", rr.Scalars(d))
-
-                    # Log subgoal markers
-                    for idx in subgoal_indices:
-                        rr.set_time("frame", idx)
+                        # 3D t-SNE
+                        tsne_3d = TSNE(n_components=3, random_state=42, n_jobs=-1)
+                        embedding_3d = tsne_3d.fit_transform(embeddings_np)
                         rr.log(
-                            "timeline/subgoals",
-                            rr.TextDocument(f"Subgoal @ {idx}"),
-                            rr.components.Color(rgba=[0, 255, 0]),
+                            "world/tsne_3d",
+                            rr.Points3D(embedding_3d, class_ids=labels),
+                            static=True,
                         )
-                    logging.info(
-                        f"Logged video and subgoal markers to Rerun for '{seq_name}'."
-                    )
 
-                # 5. Visualize if requested
-                if visualize_subgoals:
-                    vis_dir = hdf5_path.parent / "subgoal_visualizations" / seq_name
-                    vis_dir.mkdir(parents=True, exist_ok=True)
-                    for i, frame_idx in enumerate(subgoal_indices):
-                        img = Image.fromarray(video_frames_np[frame_idx])
-                        img.save(vis_dir / f"subgoal_{i:03d}_frame_{frame_idx:04d}.jpg")
-                    logging.info(
-                        f"Saved {len(subgoal_indices)} subgoal images to {vis_dir}"
-                    )
+                        # Log an annotation context for the labels
+                        class_descriptions = [
+                            rr.ClassDescription(
+                                info=rr.AnnotationInfo(id=i, label=f"Segment {i}")
+                            )
+                            for i in range(len(subgoal_indices))
+                        ]
+                        rr.log(
+                            "world/tsne_3d",
+                            rr.AnnotationContext(class_descriptions),
+                            static=True,
+                        )
 
-            except Exception as e:
-                logging.error(
-                    f"Failed to process sequence '{seq_name}': {e}", exc_info=True
-                )
+                        # 2D t-SNE
+                        tsne_2d = TSNE(n_components=2, random_state=42, n_jobs=-1)
+                        embedding_2d = tsne_2d.fit_transform(embeddings_np)
+                        rr.log(
+                            "plots/tsne_2d",
+                            rr.Points2D(embedding_2d, class_ids=labels),
+                            static=True,
+                        )
+                        rr.log(
+                            "plots/tsne_2d",
+                            rr.AnnotationContext(class_descriptions),
+                            static=True,
+                        )
+                        logging.info("Logged 2D and 3D t-SNE plots to Rerun.")
+
+                    # --- 7. Log Video and Subgoals to Rerun if requested ---
+                    if log_to_rerun:
+                        # Log the video frames over time
+                        for i, frame in enumerate(video_frames_np):
+                            rr.log(f"video/rgb/{i}", rr.Image(frame).compress(jpeg_quality=75))
+
+                        # Log the distance curve
+                        for i, d in enumerate(distances):
+                            rr.log(f"diagnostics/distance_to_final_goal/{i}", rr.Scalars(d))
+
+                        # Log subgoal markers as text entries if descriptions are available
+                        if generate_descriptions:
+                            descriptions = uvd_action_group["action_descriptions"][:]
+                            boundaries = uvd_action_group["action_boundaries"][:]
+                            for i, (start, _) in enumerate(boundaries):
+                                description = descriptions[i]
+                                if isinstance(description, bytes):
+                                    description = description.decode("utf-8")
+                                rr.log(f"action/events/{start}", rr.TextDocument(text=description))
+                        else:
+                            # Fallback to original subgoal markers if no descriptions
+                            for idx in subgoal_indices:
+                                rr.log(
+                                    f"timeline/subgoals/{idx}",
+                                    rr.TextDocument(f"Subgoal @ {idx}"),
+                                    rr.components.Color(rgba=[0, 255, 0]),
+                                )
+                        logging.info(
+                            f"Logged video and subgoal markers to Rerun for '{seq_name}'."
+                        )
+
+                    # 5. Visualize if requested
+                    if visualize_subgoals:
+                        vis_dir = hdf5_path.parent / "subgoal_visualizations" / seq_name
+                        vis_dir.mkdir(parents=True, exist_ok=True)
+                        for i, frame_idx in enumerate(subgoal_indices):
+                            img = Image.fromarray(video_frames_np[frame_idx])
+                            img.save(vis_dir / f"subgoal_{i:03d}_frame_{frame_idx:04d}.jpg")
+                        logging.info(
+                            f"Saved {len(subgoal_indices)} subgoal images to {vis_dir}"
+                        )
+
+                except Exception as e:
+                    logging.error(
+                        f"Failed to process sequence '{seq_name}': {e}", exc_info=True
+                    )
 
 
 def main():
@@ -531,6 +583,11 @@ def main():
         help="Enable generation of semantic descriptions for each action segment.",
     )
     parser.add_argument(
+        "--only-generate-descriptions",
+        action="store_true",
+        help="Only run the description generation step. Requires subgoals to exist.",
+    )
+    parser.add_argument(
         "--captioning-model",
         type=str,
         default="microsoft/git-base-vatex",
@@ -565,6 +622,7 @@ def main():
         args.generate_descriptions,
         args.captioning_model,
         args.num_caption_frames,
+        args.only_generate_descriptions,
     )
 
 
