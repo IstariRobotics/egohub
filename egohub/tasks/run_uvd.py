@@ -195,26 +195,20 @@ def _generate_and_save_descriptions(
 
     descriptions = []
     boundaries = uvd_action_group["action_boundaries"][:]
-    logging.info(
-        f"Generating descriptions for {len(boundaries)} action segments..."
-    )
+    logging.info(f"Generating descriptions for {len(boundaries)} action segments...")
 
     for start, end in tqdm(boundaries, desc="Generating Descriptions"):
         # Sample frames evenly from the segment
-        indices = np.linspace(
-            start, end - 1, num=max_frames_for_model, dtype=int
-        )
+        indices = np.linspace(start, end - 1, num=max_frames_for_model, dtype=int)
         segment_frames = [video_frames_np[i] for i in indices]
 
         # Generate caption
-        inputs = caption_processor(
-            images=segment_frames, return_tensors="pt"
-        ).to(device)
+        inputs = caption_processor(images=segment_frames, return_tensors="pt").to(
+            device
+        )
         pixel_values = inputs.pixel_values
 
-        generated_ids = caption_model.generate(
-            pixel_values=pixel_values, max_length=50
-        )
+        generated_ids = caption_model.generate(pixel_values=pixel_values, max_length=50)
         generated_caption = caption_processor.batch_decode(
             generated_ids, skip_special_tokens=True
         )[0].strip()
@@ -225,9 +219,7 @@ def _generate_and_save_descriptions(
         del uvd_action_group["action_descriptions"]
     uvd_action_group.create_dataset(
         "action_descriptions",
-        data=np.array(
-            descriptions, dtype=h5py.string_dtype(encoding="utf-8")
-        ),
+        data=np.array(descriptions, dtype=h5py.string_dtype(encoding="utf-8")),
     )
     logging.info("Saved action descriptions to HDF5.")
 
@@ -364,14 +356,18 @@ def run_uvd_on_hdf5(  # noqa: C901
                             min_interval=min_peak_interval,
                         )
                     else:
-                        raise ValueError(f"Unknown decomposition method: {decomp_method}")
+                        raise ValueError(
+                            f"Unknown decomposition method: {decomp_method}"
+                        )
 
                     # 4. Save Results
                     subgoals_group = traj_group.create_group(output_group_name)
                     subgoals_group.create_dataset(
                         "indices", data=np.array(subgoal_indices, dtype=np.int32)
                     )
-                    logging.info(f"Saved {len(subgoal_indices)} subgoals for '{seq_name}'.")
+                    logging.info(
+                        f"Saved {len(subgoal_indices)} subgoals for '{seq_name}'."
+                    )
 
                     # 4b. Create UVD action boundaries for visualization
                     uvd_action_group = traj_group.require_group("actions/uvd")
@@ -405,7 +401,7 @@ def run_uvd_on_hdf5(  # noqa: C901
                             zip(subgoal_indices[:-1], subgoal_indices[1:])
                         ):
                             labels[start:end] = i
-                        labels[subgoal_indices[-1]:] = len(subgoal_indices) - 1
+                        labels[subgoal_indices[-1] :] = len(subgoal_indices) - 1
 
                         # 3D t-SNE
                         tsne_3d = TSNE(n_components=3, random_state=42, n_jobs=-1)
@@ -448,11 +444,16 @@ def run_uvd_on_hdf5(  # noqa: C901
                     if log_to_rerun:
                         # Log the video frames over time
                         for i, frame in enumerate(video_frames_np):
-                            rr.log(f"video/rgb/{i}", rr.Image(frame).compress(jpeg_quality=75))
+                            rr.log(
+                                f"video/rgb/{i}",
+                                rr.Image(frame).compress(jpeg_quality=75),
+                            )
 
                         # Log the distance curve
                         for i, d in enumerate(distances):
-                            rr.log(f"diagnostics/distance_to_final_goal/{i}", rr.Scalars(d))
+                            rr.log(
+                                f"diagnostics/distance_to_final_goal/{i}", rr.Scalars(d)
+                            )
 
                         # Log subgoal markers as text entries if descriptions are available
                         if generate_descriptions:
@@ -462,7 +463,10 @@ def run_uvd_on_hdf5(  # noqa: C901
                                 description = descriptions[i]
                                 if isinstance(description, bytes):
                                     description = description.decode("utf-8")
-                                rr.log(f"action/events/{start}", rr.TextDocument(text=description))
+                                rr.log(
+                                    f"action/events/{start}",
+                                    rr.TextDocument(text=description),
+                                )
                         else:
                             # Fallback to original subgoal markers if no descriptions
                             for idx in subgoal_indices:
@@ -481,7 +485,9 @@ def run_uvd_on_hdf5(  # noqa: C901
                         vis_dir.mkdir(parents=True, exist_ok=True)
                         for i, frame_idx in enumerate(subgoal_indices):
                             img = Image.fromarray(video_frames_np[frame_idx])
-                            img.save(vis_dir / f"subgoal_{i:03d}_frame_{frame_idx:04d}.jpg")
+                            img.save(
+                                vis_dir / f"subgoal_{i:03d}_frame_{frame_idx:04d}.jpg"
+                            )
                         logging.info(
                             f"Saved {len(subgoal_indices)} subgoal images to {vis_dir}"
                         )
