@@ -98,6 +98,7 @@ class RerunExporter:
             self._log_temporal_camera_data(traj_group, cam_keys, frame_idx)
             self._log_temporal_object_data(traj_group, cam_keys, frame_idx)
             self._log_temporal_skeleton_data(traj_group, frame_idx)
+            self._log_uvd_results(traj_group, cam_keys, frame_idx)
 
     def _create_blueprint(self, camera_names: List[str]) -> rrb.Blueprint:
         spatial2d_views = [
@@ -372,6 +373,34 @@ class RerunExporter:
                         colors=colors,
                     ),
                 )
+                
+    def _log_uvd_results(
+        self, traj_group: h5py.Group, cam_keys: List[str], frame_idx: int
+    ):
+        """Logs UVD action descriptions to the timeline."""
+        uvd_group = traj_group.get("actions/uvd")
+        if not isinstance(uvd_group, h5py.Group):
+            return
+
+        boundaries_dset = uvd_group.get("action_boundaries")
+        if not isinstance(boundaries_dset, h5py.Dataset):
+            return
+
+        boundaries = boundaries_dset[:]
+        descriptions_dset = uvd_group.get("action_descriptions")
+
+        for i, (start, _) in enumerate(boundaries):
+            if frame_idx == start:
+                description_text = f"Action segment {i+1} starts"
+                if descriptions_dset is not None and i < len(descriptions_dset):
+                    description = descriptions_dset[i]
+                    if isinstance(description, bytes):
+                        description_text = description.decode("utf-8")
+                    else:
+                        description_text = str(description)
+
+                # The user requested to log to "action/events"
+                rr.log("action/events", rr.TextLog(text=description_text))
 
     def _confidence_scores_to_rgb(self, confidence_scores: np.ndarray) -> np.ndarray:
         """Converts confidence scores (0-1) to RGB colors for visualization."""
