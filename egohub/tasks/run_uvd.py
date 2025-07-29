@@ -278,9 +278,9 @@ def run_uvd_on_hdf5(  # noqa: C901
                 output_group_name = f"subgoals_{preprocessor_name}"
                 if output_group_name not in traj_group:
                     logging.error(
-                        f"Cannot generate descriptions for '{seq_name}' because subgoal "
-                        f"group '{output_group_name}' does not exist. Run the full "
-                        "pipeline first."
+                        f"Cannot generate descriptions for '{seq_name}' because "
+                        f"subgoal group '{output_group_name}' does not exist. Run "
+                        "the full pipeline first."
                     )
                     continue
 
@@ -455,7 +455,8 @@ def run_uvd_on_hdf5(  # noqa: C901
                                 f"diagnostics/distance_to_final_goal/{i}", rr.Scalars(d)
                             )
 
-                        # Log subgoal markers as text entries if descriptions are available
+                        # Log subgoal markers as text entries
+                        # if descriptions are available
                         if generate_descriptions:
                             descriptions = uvd_action_group["action_descriptions"][:]
                             boundaries = uvd_action_group["action_boundaries"][:]
@@ -476,7 +477,8 @@ def run_uvd_on_hdf5(  # noqa: C901
                                     rr.components.Color(rgba=[0, 255, 0]),
                                 )
                         logging.info(
-                            f"Logged video and subgoal markers to Rerun for '{seq_name}'."
+                            "Logged video and subgoal markers to Rerun for "
+                            f"'{seq_name}'."
                         )
 
                     # 5. Visualize if requested
