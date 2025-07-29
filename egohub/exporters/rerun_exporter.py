@@ -373,7 +373,7 @@ class RerunExporter:
                         colors=colors,
                     ),
                 )
-
+                
     def _log_uvd_results(
         self, traj_group: h5py.Group, cam_keys: List[str], frame_idx: int
     ):
