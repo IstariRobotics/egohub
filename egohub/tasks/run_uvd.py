@@ -1,7 +1,7 @@
 import argparse
 import logging
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 
 import h5py
 import numpy as np
@@ -231,7 +231,7 @@ def run_uvd_on_hdf5(  # noqa: C901
     hdf5_path: Path,
     preprocessor_name: Literal["dinov2", "vip"],
     device: str,
-    sequence_name: str | None = None,
+    sequence_name: Optional[str] = None,
     decomp_method: Literal["derivative", "peaks"] = "derivative",
     derivative_threshold: float = 1e-3,
     window_length: int = 11,
@@ -239,7 +239,7 @@ def run_uvd_on_hdf5(  # noqa: C901
     visualize_subgoals: bool = False,
     visualize_tsne: bool = False,
     log_to_rerun: bool = False,
-    save_to_rerun: Path | None = None,
+    save_to_rerun: Optional[Path] = None,
     force_reprocess: bool = False,
     generate_descriptions: bool = False,
     captioning_model: str = "microsoft/git-base-vatex",

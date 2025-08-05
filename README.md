@@ -417,6 +417,7 @@ The new modular architecture separates **Tasks** (what to do) from **Backends** 
 | :---------------------- | :---------------------- | :------------------- | :-------------------------------------------------- |
 | **Object Detection**    | `ObjectDetectionTask`   | `objects/`           | Detects objects and writes bounding boxes and scores. |
 | **Pose Estimation**     | `PoseEstimationTask`    | `skeleton/`          | Estimates poses and writes keypoints and confidences. |
+| **UVD (Universal Video Decomposition)** | `UVDTask` | `actions/uvd` | Decomposes videos into action segments and generates semantic descriptions. |
 
 ### Supported Backends
 
