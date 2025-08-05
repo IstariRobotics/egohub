@@ -94,6 +94,15 @@ class Hand:
 
 
 @dataclass
+class Object:
+    label: str = field(metadata={"h5_type": "attr"})
+    center: np.ndarray = field(metadata={"shape": (-1, 3), "dtype": np.float32})
+    dimensions: np.ndarray = field(metadata={"shape": (3,), "dtype": np.float32})
+    rotation: np.ndarray = field(metadata={"shape": (-1, 3), "dtype": np.float32})
+    frame_indices: np.ndarray = field(metadata={"shape": (-1,), "dtype": np.uint64})
+
+
+@dataclass
 class Skeleton:
     positions: np.ndarray = field(metadata={"shape": (-1, -1, 3), "dtype": np.float32})
     confidences: np.ndarray = field(metadata={"shape": (-1, -1), "dtype": np.float32})
@@ -114,6 +123,7 @@ class Trajectory:
     metadata: Metadata
     cameras: Dict[str, Camera]
     hands: Dict[str, Hand]
+    objects: Optional[Dict[str, Object]] = None
     skeleton: Optional[Skeleton] = None
 
 
