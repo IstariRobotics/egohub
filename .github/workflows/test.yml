@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.9"]
+        python-version: ["3.11"]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -24,18 +24,23 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip uv
-          uv pip install --system -e ".[dev]" pytest-cov ruff hypothesis codecov
+          uv sync --extra dev
+          uv pip install pytest-cov hypothesis codecov
 
       # ---------- Static Analysis ---------- #
       - name: Run Ruff (lint)
-        run: ruff check egohub
+        run: uv run ruff check egohub
 
       - name: Black formatting check
-        run: black --check .
+        run: uv run black --check .
 
       # ---------- Unit Tests ---------- #
       - name: Run Pytest unit suite with coverage
-        run: pytest -m "not integration and not e2e and not perf" --cov=egohub --cov-report=xml --cov-report=term-missing --cov-fail-under=0
+        run: uv run pytest -m "not integration and not e2e and not perf" --cov=egohub --cov-report=xml --cov-report=term-missing --cov-fail-under=0
