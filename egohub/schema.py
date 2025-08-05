@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field, fields, is_dataclass
-from typing import Any, Dict, Optional, Type, get_args, get_origin
+from typing import Any, Dict, Optional, Type, Union, get_args, get_origin
 
 import h5py
 import numpy as np
@@ -200,28 +200,76 @@ def _validate_dataset_shape(
         logging.warning(msg)
 
 
+def _get_value_type_from_optional_dict(field_type: Any) -> Any:
+    """
+    Extract value type from Optional[Dict[str, ValType]] or Dict[str, ValType].
+    """
+    if get_origin(field_type) is Optional:
+        value_type = get_args(get_args(field_type)[0])[1]
+    else:
+        value_type = get_args(field_type)[1]
+    return value_type
+
+
+def _is_optional_field(field_type: Any) -> tuple[bool, bool]:
+    """Check if a field is optional and if it's a dict type."""
+    is_optional = False
+    is_dict = False
+
+    if get_origin(field_type) is Union:
+        # Check if this is Optional (Union[Type, None])
+        args = get_args(field_type)
+        if type(None) in args:
+            is_optional = True
+            # Check if the non-None type is a dict
+            non_none_types = [arg for arg in args if arg is not type(None)]
+            if non_none_types:
+                is_dict = get_origin(non_none_types[0]) is dict
+    elif get_origin(field_type) is dict:
+        is_dict = True
+
+    return is_optional, is_dict
+
+
 def _validate_dict_groups(
     h5_group: h5py.Group, schema_cls: Type[Any], path: str, strict: bool
 ) -> None:
     """Validate dictionary groups (like 'cameras' or 'hands')."""
     for f in fields(schema_cls):
-        if get_origin(f.type) is dict:
+        field_type = f.type
+
+        # Handle Optional[Dict[...]] types
+        if get_origin(field_type) is Optional:
+            # If it's Optional, get the actual type
+            actual_type = get_args(field_type)[0]
+            if get_origin(actual_type) is not dict:
+                continue
+            # Check if the optional group exists
             dict_group = h5_group.get(f.name)
             if not dict_group:
                 continue
-
-            value_type = get_args(f.type)[1]
-            if not is_dataclass(value_type) or not isinstance(dict_group, h5py.Group):
+        elif get_origin(field_type) is dict:
+            dict_group = h5_group.get(f.name)
+            if not dict_group:
                 continue
+        else:
+            continue
 
-            for child_name, child_group in dict_group.items():
-                if isinstance(child_group, h5py.Group):
-                    validate_hdf5_with_schema(
-                        child_group,
-                        value_type,
-                        f"{path}/{f.name}/{child_name}",
-                        strict=strict,
-                    )
+        # Get the value type (either from Optional[Dict[str, ValueType]] or
+        # Dict[str, ValueType])
+        value_type = _get_value_type_from_optional_dict(field_type)
+
+        if not is_dataclass(value_type) or not isinstance(dict_group, h5py.Group):
+            continue
+
+        for child_name, child_group in dict_group.items():
+            if isinstance(child_group, h5py.Group):
+                validate_hdf5_with_schema(
+                    child_group,
+                    value_type,
+                    f"{path}/{f.name}/{child_name}",
+                    strict=strict,
+                )
 
 
 def validate_hdf5_with_schema(
@@ -258,9 +306,20 @@ def validate_hdf5_with_schema(
 
         # Check if required members are present
         if field_name not in h5_group:
-            if not (
-                get_origin(field_type) is Optional or get_origin(field_type) is dict
-            ):
+            # Handle type annotations properly using get_type_hints
+            from typing import get_type_hints
+
+            try:
+                type_hints = get_type_hints(schema_cls)
+                actual_field_type = type_hints.get(field_name, field_type)
+            except (NameError, TypeError):
+                # Fallback to string parsing for complex types
+                actual_field_type = field_type
+
+            # Check if the field is optional
+            is_optional, is_dict = _is_optional_field(actual_field_type)
+
+            if not (is_optional or is_dict):
                 msg = f"Validation: Missing required group/dataset '{current_path}'"
                 if strict:
                     raise SchemaValidationError(msg)
