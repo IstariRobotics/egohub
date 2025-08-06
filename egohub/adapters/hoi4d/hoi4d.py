@@ -1,0 +1,553 @@
+import json
+import logging
+import os
+import pickle
+import uuid
+from pathlib import Path
+from typing import Any, Dict, List
+
+import cv2
+import numpy as np
+
+from egohub.adapters.base import BaseAdapter
+from egohub.adapters.dataset_info import DatasetInfo
+
+
+class HOI4DAdapter(BaseAdapter):
+    name = "hoi4d"
+
+    def _get_handpose(self, file_path: Path) -> Dict[str, Any]:
+        with open(file_path, "rb") as file:
+            data = pickle.load(file)
+        return {
+            "poseCoeff": data["poseCoeff"],
+            "beta": data["beta"],
+            "trans": data["trans"],
+            "kps2D": data["kps2D"],
+        }
+
+    def _get_handpose_none(self) -> Dict[str, Any]:
+        return {
+            "poseCoeff": np.full(48, np.nan, dtype=np.float32),
+            "beta": np.full(10, np.nan, dtype=np.float32),
+            "trans": np.full(3, np.nan, dtype=np.float32),
+            "kps2D": np.full((21, 2), np.nan, dtype=np.float32),
+        }
+
+    @property
+    def source_joint_names(self) -> List[str]:
+        return self.config["mano"]["joint_names"]
+
+    @property
+    def source_skeleton_hierarchy(self) -> Dict[str, str]:
+        return self.config["mano"]["skeleton_hierarchy"]
+
+    def get_camera_intrinsics(self, camera_file: Path) -> np.ndarray:
+        """Load camera intrinsics from .npy file or .txt trajectory file."""
+        if camera_file.suffix == ".npy":
+            return np.load(camera_file)
+        elif camera_file.suffix == ".txt":
+            import open3d as o3d
+
+            trajectory = o3d.io.read_pinhole_camera_trajectory(str(camera_file))
+            if not trajectory.parameters:
+                raise ValueError(f"No camera parameters found in {camera_file}")
+            return trajectory.parameters[0].intrinsic.intrinsic_matrix
+        else:
+            raise ValueError(f"Unsupported camera file format: {camera_file.suffix}")
+
+    def get_dataset_info(self, seq_info: Dict[str, Any]) -> DatasetInfo:
+        """
+        Loads dataset-wide metadata from the adapter's configuration file.
+        This now requires seq_info to load the correct camera intrinsics.
+        """
+        try:
+            intrinsics = self.get_camera_intrinsics(seq_info["camera_file"])
+        except Exception as e:
+            logging.warning(
+                f"Could not load intrinsics for {seq_info['relative_path']}, "
+                f"using defaults. Error: {e}"
+            )
+            intrinsics = np.array(
+                [[600.0, 0.0, 320.0], [0.0, 600.0, 240.0], [0.0, 0.0, 1.0]],
+                dtype=np.float32,
+            )  # Default intrinsics
+
+        return DatasetInfo(
+            camera_intrinsics=intrinsics,
+            frame_rate=self.config["metadata"]["source_fps"],
+            joint_names=self.source_joint_names,
+            joint_hierarchy=self.source_skeleton_hierarchy,
+        )
+
+    def discover_sequences(self) -> List[Dict[str, Any]]:
+        """
+        Discovers all processable data sequences in the raw_dir.
+
+        The HOI4D dataset structure is:
+        HOI4D_release/{subject}/{hand}/{camera}/{noun}/{sequence}/{action}/{task}/align_rgb/image.mp4
+        """
+        sequences = []
+        base_dir = self.raw_dir / "HOI4D_release"
+        logging.info(f"Searching for sequences in: {base_dir}")
+
+        if not base_dir.is_dir():
+            logging.warning(f"Base directory not found: {base_dir}")
+            return []
+
+        # Walk through the complex directory structure
+        for root, dirs, _ in os.walk(base_dir):
+            if "align_rgb" in dirs:
+                align_rgb_dir = Path(root) / "align_rgb"
+                video_file = align_rgb_dir / "image.mp4"
+
+                if not video_file.exists():
+                    continue
+
+                # Parse path: subject/hand/camera/noun/sequence/action/task
+                try:
+                    relative_path = Path(root).relative_to(base_dir)
+                    path_parts = relative_path.parts
+
+                    # Need at least subject/hand/camera/noun/sequence/action/task
+                    if len(path_parts) < 7:
+                        logging.debug(
+                            f"Skipping {relative_path}: insufficient path depth"
+                        )
+                        continue
+
+                    subject = path_parts[0]
+                    hand = path_parts[1]
+                    camera = path_parts[2]
+                    noun = path_parts[3]
+                    sequence = path_parts[4]
+                    action = path_parts[5]
+                    task = path_parts[6]
+
+                    # Look for camera intrinsics file
+                    camera_npy_file = (
+                        self.raw_dir / "camera_params" / subject / "intrin.npy"
+                    )
+                    camera_txt_file = (
+                        self.raw_dir / "camera_params" / f"{relative_path}.txt"
+                    )
+
+                    camera_file = None
+                    if camera_npy_file.exists():
+                        camera_file = camera_npy_file
+                    elif camera_txt_file.exists():
+                        camera_file = camera_txt_file
+                    else:
+                        logging.debug(f"No camera file found for {relative_path}")
+                        continue
+
+                    # Look for object pose directory
+                    objpose_dir = (
+                        self.raw_dir / "HOI4D_annotations" / relative_path / "objpose"
+                    )
+
+                    # Create sequence metadata
+                    sequence_info = {
+                        "video_file": video_file,
+                        "camera_file": camera_file,
+                        "relative_path": relative_path,
+                        "subject": subject,
+                        "hand": hand,
+                        "camera": camera,
+                        "noun": noun,
+                        "sequence": sequence,
+                        "action": action,
+                        "task": task,
+                        "annotation_file": None,  # No color.json in current data
+                        "objpose_dir": objpose_dir if objpose_dir.exists() else None,
+                    }
+
+                    sequences.append(sequence_info)
+                    logging.debug(
+                        f"Found sequence: {subject}/{hand}/{camera}/"
+                        f"{noun}/{sequence}/{action}/{task}"
+                    )
+
+                except Exception as e:
+                    logging.warning(f"Error processing path {root}: {e}")
+                    continue
+
+        logging.info(f"Discovered {len(sequences)} sequences.")
+        return sequences
+
+    def _determine_frame_range(
+        self, seq_info: Dict[str, Any], total_frames: int
+    ) -> range:
+        """Determine the frame range based on available hand pose files."""
+        subject = seq_info["subject"]
+
+        # Find directory with hand pose files
+        for hand_type in ["handpose_right_hand", "handpose_left_hand"]:
+            hand_dir = (
+                self.raw_dir
+                / "Hand_pose"
+                / hand_type
+                / subject
+                / seq_info["hand"]
+                / seq_info["camera"]
+                / seq_info["noun"]
+                / seq_info["sequence"]
+                / seq_info["action"]
+                / seq_info["task"]
+            )
+            if hand_dir.exists():
+                pickle_files = list(hand_dir.glob("*.pickle"))
+                if pickle_files:
+                    frame_numbers = []
+                    for f in pickle_files:
+                        try:
+                            frame_numbers.append(int(f.stem))
+                        except ValueError:
+                            continue
+
+                    if frame_numbers:
+                        start_frame = min(frame_numbers)
+                        end_frame = min(max(frame_numbers), total_frames - 1)
+                        # Process all available frames with hand pose data
+                        return range(start_frame, end_frame + 1)
+
+        # If no hand pose files found, process all video frames
+        return range(0, total_frames)
+
+    def _get_hand_poses_for_frame(self, seq_info: Dict[str, Any], frame_idx: int):
+        """Get hand poses for a specific frame."""
+        subject = seq_info["subject"]
+
+        # Build hand pose file paths
+        l_hand_path = (
+            self.raw_dir
+            / "Hand_pose"
+            / "handpose_left_hand"
+            / subject
+            / seq_info["hand"]
+            / seq_info["camera"]
+            / seq_info["noun"]
+            / seq_info["sequence"]
+            / seq_info["action"]
+            / seq_info["task"]
+            / f"{frame_idx}.pickle"
+        )
+        r_hand_path = (
+            self.raw_dir
+            / "Hand_pose"
+            / "handpose_right_hand"
+            / subject
+            / seq_info["hand"]
+            / seq_info["camera"]
+            / seq_info["noun"]
+            / seq_info["sequence"]
+            / seq_info["action"]
+            / seq_info["task"]
+            / f"{frame_idx}.pickle"
+        )
+
+        # Try different frame number formats if exact one doesn't exist
+        for padding in [0, 5]:  # Try unpadded and 5-digit padded
+            if padding > 0:
+                frame_str = f"{frame_idx:0{padding}d}.pickle"
+            else:
+                frame_str = f"{frame_idx}.pickle"
+
+            l_hand_alt = l_hand_path.parent / frame_str
+            r_hand_alt = r_hand_path.parent / frame_str
+
+            if l_hand_alt.exists():
+                l_hand_path = l_hand_alt
+                break
+            if r_hand_alt.exists():
+                r_hand_path = r_hand_alt
+                break
+
+        # Get hand poses
+        left_pose = (
+            self._get_handpose(l_hand_path)
+            if l_hand_path.exists()
+            else self._get_handpose_none()
+        )
+        right_pose = (
+            self._get_handpose(r_hand_path)
+            if r_hand_path.exists()
+            else self._get_handpose_none()
+        )
+
+        return left_pose, right_pose
+
+    def _get_object_poses_for_frame(self, seq_info: Dict[str, Any], frame_idx: int):
+        """Get object poses for a specific frame."""
+        objpose_dir = seq_info.get("objpose_dir")
+        if not objpose_dir or not objpose_dir.exists():
+            return None
+
+        # Try different frame number formats
+        for padding in [5, 0]:  # Try 5-digit padded and unpadded
+            if padding > 0:
+                frame_str = f"{frame_idx:0{padding}d}.json"
+            else:
+                frame_str = f"{frame_idx}.json"
+
+            objpose_file = objpose_dir / frame_str
+            if objpose_file.exists():
+                try:
+                    with open(objpose_file) as f:
+                        data = json.load(f)
+                        if data:  # Only return if file has content
+                            return data
+                except (json.JSONDecodeError, FileNotFoundError):
+                    continue
+
+        return None
+
+    def _store_sequence_data(
+        self,
+        traj_group,
+        seq_info,
+        rgb_images,
+        camera_poses,
+        frame_indices,
+        hand_poses_left,
+        hand_poses_right,
+        object_poses,
+    ):
+        """Store processed sequence data in HDF5 groups with EgoDex compatibility."""
+        hands_group = traj_group["hands"]
+        ego_camera_group = traj_group["cameras/ego_camera"]
+
+        # Create metadata group (EgoDex compatibility)
+        metadata_group = traj_group.create_group("metadata")
+
+        # Create action label from HOI4D sequence info
+        action_parts = [
+            f"Subject {seq_info['subject']}",
+            f"Hand {seq_info['hand']}",
+            f"Camera {seq_info['camera']}",
+            f"Object {seq_info['noun']}",
+            f"Task {seq_info['action']}-{seq_info['task']}",
+        ]
+        action_label = " - ".join(action_parts)
+
+        metadata_group.attrs["action_label"] = action_label
+        metadata_group.attrs["source_dataset"] = "HOI4D"
+        metadata_group.attrs["source_identifier"] = str(seq_info["relative_path"])
+        metadata_group.attrs["uuid"] = str(uuid.uuid4())
+
+        # Store HOI4D-specific metadata as additional attributes
+        metadata_group.attrs["hoi4d_subject"] = seq_info["subject"]
+        metadata_group.attrs["hoi4d_hand"] = seq_info["hand"]
+        metadata_group.attrs["hoi4d_camera"] = seq_info["camera"]
+        metadata_group.attrs["hoi4d_noun"] = seq_info["noun"]
+        metadata_group.attrs["hoi4d_sequence"] = seq_info["sequence"]
+        metadata_group.attrs["hoi4d_action"] = seq_info["action"]
+        metadata_group.attrs["hoi4d_task"] = seq_info["task"]
+
+        # Create timestamps (30 FPS assumption like EgoDex)
+        timestamps_ns = np.arange(len(frame_indices), dtype=np.uint64) * (10**9 // 30)
+        metadata_group.create_dataset("timestamps_ns", data=timestamps_ns)
+
+        # Store camera data - RGB in EgoDx-compatible compressed format
+        rgb_group = ego_camera_group.create_group("rgb")
+
+        # Convert RGB frames to compressed JPEG format like EgoDx
+        temp_frames = []
+        for frame in rgb_images:
+            _, encoded_image = cv2.imencode(
+                ".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 95]
+            )
+            temp_frames.append(encoded_image.tobytes())
+
+        if temp_frames:
+            max_frame_size = max(len(f) for f in temp_frames)
+            image_dataset = rgb_group.create_dataset(
+                "image_bytes",
+                (len(temp_frames), max_frame_size),
+                dtype=np.uint8,
+            )
+            for i, frame_bytes in enumerate(temp_frames):
+                padded_frame = frame_bytes + b"\x00" * (
+                    max_frame_size - len(frame_bytes)
+                )
+                image_dataset[i] = np.frombuffer(padded_frame, dtype=np.uint8)
+
+            rgb_group.create_dataset(
+                "frame_sizes",
+                data=[len(f) for f in temp_frames],
+                dtype=np.int32,
+            )
+
+            # Add frame indices for RGB data
+            rgb_group.create_dataset(
+                "frame_indices", data=np.array(frame_indices, dtype=np.uint64)
+            )
+
+        ego_camera_group.create_dataset("pose_in_world", data=np.array(camera_poses))
+        ego_camera_group.create_dataset(
+            "pose_indices", data=np.array(frame_indices, dtype=np.uint64)
+        )
+
+        # Note: HOI4D dataset does not contain skeleton data,
+        # so we skip the skeleton group
+        # This maintains compatibility while only including groups with actual data
+
+        # Store hand poses - keep MANO data but also add EgoDx-style pose_in_world
+        num_frames = len(frame_indices)
+
+        if hand_poses_left:
+            left_hand_group = hands_group.create_group("left")
+            # Store MANO parameters
+            for key in hand_poses_left[0]:
+                data = np.array([pose[key] for pose in hand_poses_left])
+                left_hand_group.create_dataset(f"mano_{key}", data=data)
+
+            # Add EgoDex-style pose_in_world (identity matrices as placeholder)
+            left_poses = np.tile(np.eye(4), (num_frames, 1, 1)).astype(np.float32)
+            left_hand_group.create_dataset("pose_in_world", data=left_poses)
+            left_hand_group.create_dataset(
+                "pose_indices", data=np.array(frame_indices, dtype=np.uint64)
+            )
+
+        if hand_poses_right:
+            right_hand_group = hands_group.create_group("right")
+            # Store MANO parameters
+            for key in hand_poses_right[0]:
+                data = np.array([pose[key] for pose in hand_poses_right])
+                right_hand_group.create_dataset(f"mano_{key}", data=data)
+
+            # Add EgoDex-style pose_in_world (identity matrices as placeholder)
+            right_poses = np.tile(np.eye(4), (num_frames, 1, 1)).astype(np.float32)
+            right_hand_group.create_dataset("pose_in_world", data=right_poses)
+            right_hand_group.create_dataset(
+                "pose_indices", data=np.array(frame_indices, dtype=np.uint64)
+            )
+
+        # Store object poses if available
+        valid_object_poses = [pose for pose in object_poses if pose is not None]
+        if valid_object_poses:
+            objects_group = traj_group.create_group("objects")
+
+            # For now, store the raw object pose data
+            # This can be extended based on the actual data structure
+            for i, obj_pose in enumerate(object_poses):
+                if obj_pose is not None:
+                    frame_group = objects_group.create_group(
+                        f"frame_{frame_indices[i]:05d}"
+                    )
+                    # Store the JSON data as attributes or datasets
+                    for key, value in obj_pose.items():
+                        if isinstance(value, (list, np.ndarray)):
+                            try:
+                                # Attempt to convert to a standard numpy array
+                                data_array = np.array(value)
+                                if data_array.dtype == "O":
+                                    # If it's an object array, it's non-uniform.
+                                    # Store as a JSON string attribute instead.
+                                    frame_group.attrs[key] = json.dumps(value)
+                                else:
+                                    frame_group.create_dataset(key, data=data_array)
+                            except (TypeError, ValueError):
+                                # If conversion fails, serialize and store as attribute
+                                frame_group.attrs[key] = json.dumps(value)
+                        else:
+                            # For other types, store as a simple attribute
+                            frame_group.attrs[key] = value
+
+            objects_group.attrs["num_frames_with_objects"] = len(valid_object_poses)
+            object_indices = [
+                i for i, pose in enumerate(object_poses) if pose is not None
+            ]
+            objects_group.create_dataset(
+                "object_indices", data=np.array(object_indices, dtype=np.uint64)
+            )
+
+    def process_sequence(self, seq_info: Dict[str, Any], traj_group: Any):
+        """Processes a single data sequence and writes it to the HDF5 group."""
+        video_file = seq_info["video_file"]
+        camera_file = seq_info["camera_file"]
+        relative_path = seq_info["relative_path"]
+
+        logging.info(f"Processing sequence: {relative_path}")
+
+        # Load and validate video
+        cap = cv2.VideoCapture(str(video_file))
+        if not cap.isOpened():
+            logging.error(f"Failed to open video file: {video_file}")
+            return
+
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        logging.info(f"Video info: {total_frames} frames at {fps} fps")
+
+        # Load camera intrinsics
+        try:
+            intrinsics = self.get_camera_intrinsics(camera_file)
+        except Exception as e:
+            logging.error(f"Failed to load camera intrinsics from {camera_file}: {e}")
+            cap.release()
+            return
+
+        # Create HDF5 groups and add metadata
+        traj_group.create_group("hands")
+        camera_group = traj_group.create_group("cameras")
+        ego_camera_group = camera_group.create_group("ego_camera")
+        ego_camera_group.attrs["is_ego"] = True
+        ego_camera_group.create_dataset("intrinsics", data=intrinsics)
+
+        # Note: Metadata will be stored in metadata group for EgoDex compatibility
+
+        # Determine frame range and process frames
+        frame_range = self._determine_frame_range(seq_info, total_frames)
+        logging.info(
+            f"Processing frame range: {min(frame_range) if frame_range else 0} "
+            f"to {max(frame_range) if frame_range else 0}"
+        )
+
+        rgb_images = []
+        hand_poses_left = []
+        hand_poses_right = []
+        frame_indices = []
+        camera_poses = []
+        object_poses = []
+
+        for frame_idx in frame_range:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+            ret, frame = cap.read()
+            if not ret:
+                continue
+
+            rgb_images.append(frame)
+            frame_indices.append(frame_idx)
+            camera_poses.append(np.eye(4))  # Identity pose (no trajectory data)
+
+            # Get hand poses for this frame
+            left_pose, right_pose = self._get_hand_poses_for_frame(seq_info, frame_idx)
+            hand_poses_left.append(left_pose)
+            hand_poses_right.append(right_pose)
+
+            # Get object poses for this frame
+            obj_pose = self._get_object_poses_for_frame(seq_info, frame_idx)
+            object_poses.append(obj_pose)
+
+        cap.release()
+
+        if not rgb_images:
+            logging.warning(f"No frames extracted from {video_file}")
+            return
+
+        # Store data in HDF5
+        self._store_sequence_data(
+            traj_group,
+            seq_info,
+            rgb_images,
+            camera_poses,
+            frame_indices,
+            hand_poses_left,
+            hand_poses_right,
+            object_poses,
+        )
+
+        logging.info(
+            f"Successfully processed {len(rgb_images)} frames from {relative_path}"
+        )

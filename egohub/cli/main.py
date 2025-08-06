@@ -14,6 +14,7 @@ import egohub.tasks
 from egohub.adapters.base import BaseAdapter
 from egohub.adapters.egodex.egodex import EgoDexAdapter
 from egohub.adapters.ho3d.ho3d import HO3DAdapter
+from egohub.adapters.hoi4d.hoi4d import HOI4DAdapter
 from egohub.backends.base import BaseBackend
 from egohub.exporters.rerun_exporter import RerunExporter
 from egohub.schema import SchemaValidationError, Trajectory, validate_hdf5_with_schema
@@ -69,6 +70,7 @@ def discover_tasks() -> dict[str, type[BaseTask]]:
 ADAPTER_MAP = {
     "egodex": EgoDexAdapter,
     "ho3d": HO3DAdapter,
+    "hoi4d": HOI4DAdapter,
 }
 BACKEND_MAP = discover_backends()
 TASK_MAP = discover_tasks()

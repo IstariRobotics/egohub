@@ -163,9 +163,14 @@ class BaseAdapter(ABC):
         from dataclasses import asdict
 
         with h5py.File(self.output_file, "w") as f_out:
-            # Store dataset_info if provided
+            # Store dataset_info using the metadata from the first sequence
             try:
-                info = self.get_dataset_info()  # type: ignore[call-arg]
+                # The `get_dataset_info` method might not expect an argument
+                # in older adapters, so we try both with and without.
+                try:
+                    info = self.get_dataset_info(sequences[0])
+                except TypeError:
+                    info = self.get_dataset_info()  # type: ignore[call-arg]
 
                 def _convert(obj):
                     if isinstance(obj, np.ndarray):
@@ -179,6 +184,7 @@ class BaseAdapter(ABC):
                 f_out.attrs["dataset_info"] = json.dumps(_convert(asdict(info)))
             except NotImplementedError:
                 pass
+
             for i, seq_info in enumerate(tqdm(sequences, desc="Processing Sequences")):
                 traj_group = f_out.create_group(f"trajectory_{i:04d}")
                 self.process_sequence(seq_info, traj_group)
