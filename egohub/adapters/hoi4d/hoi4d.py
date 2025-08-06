@@ -344,17 +344,41 @@ class HOI4DAdapter(BaseAdapter):
         timestamps_ns = np.arange(len(frame_indices), dtype=np.uint64) * (10**9 // 30)
         metadata_group.create_dataset("timestamps_ns", data=timestamps_ns)
 
-        # Store camera data - RGB as GROUP like EgoDex (not single dataset)
+        # Store camera data - RGB in EgoDx-compatible compressed format
         rgb_group = ego_camera_group.create_group("rgb")
-        rgb_array = np.array(rgb_images)
 
-        # Store RGB frames as individual datasets or chunked datasets
-        # For compatibility, we'll store as a single dataset but in a group structure
-        rgb_group.create_dataset("frames", data=rgb_array)
-        rgb_group.attrs["num_frames"] = len(rgb_images)
-        rgb_group.attrs["height"] = rgb_array.shape[1]
-        rgb_group.attrs["width"] = rgb_array.shape[2]
-        rgb_group.attrs["channels"] = rgb_array.shape[3]
+        # Convert RGB frames to compressed JPEG format like EgoDx
+        temp_frames = []
+        for frame in rgb_images:
+            _, encoded_image = cv2.imencode(
+                ".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 95]
+            )
+            temp_frames.append(encoded_image.tobytes())
+
+        if temp_frames:
+            max_frame_size = max(len(f) for f in temp_frames)
+            image_dataset = rgb_group.create_dataset(
+                "image_bytes",
+                (len(temp_frames), max_frame_size),
+                dtype=np.uint8,
+            )
+            for i, frame_bytes in enumerate(temp_frames):
+                padded_frame = frame_bytes + b"\x00" * (
+                    max_frame_size - len(frame_bytes)
+                )
+                image_dataset[i] = np.frombuffer(padded_frame, dtype=np.uint8)
+
+            rgb_group.create_dataset(
+                "frame_sizes",
+                data=[len(f) for f in temp_frames],
+                dtype=np.int32,
+            )
+
+            # Add frame indices for RGB data
+            rgb_group.create_dataset(
+                "frame_indices",
+                data=np.array(frame_indices, dtype=np.uint64)
+            )
 
         ego_camera_group.create_dataset("pose_in_world", data=np.array(camera_poses))
         ego_camera_group.create_dataset(
