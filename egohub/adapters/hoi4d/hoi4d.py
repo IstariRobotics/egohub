@@ -1,6 +1,8 @@
+import json
 import logging
 import os
 import pickle
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -58,12 +60,20 @@ class HOI4DAdapter(BaseAdapter):
         """
         Loads dataset-wide metadata from the adapter's configuration file.
         """
+        # Default camera intrinsics for HOI4D (example values)
+        default_intrinsics = np.array(
+            [[600.0, 0.0, 320.0], [0.0, 600.0, 240.0], [0.0, 0.0, 1.0]],
+            dtype=np.float32,
+        )
+
         return DatasetInfo(
-            name=self.name,
-            source_fps=self.config["metadata"]["source_fps"],
-            target_fps=self.config["metadata"]["target_fps"],
-            joint_name_to_source_id={},
-            joint_name_to_remap_source_id={},
+            camera_intrinsics=default_intrinsics,
+            view_coordinates="RDF",
+            frame_rate=self.config["metadata"]["source_fps"],
+            joint_names=self.source_joint_names,
+            joint_hierarchy=self.source_skeleton_hierarchy,
+            joint_remap={},  # HOI4D uses MANO directly, no remapping needed
+            modalities={"rgb": True, "depth": False, "pointcloud": False, "imu": False},
         )
 
     def discover_sequences(self) -> List[Dict[str, Any]]:
@@ -127,6 +137,11 @@ class HOI4DAdapter(BaseAdapter):
                         logging.debug(f"No camera file found for {relative_path}")
                         continue
 
+                    # Look for object pose directory
+                    objpose_dir = (
+                        self.raw_dir / "HOI4D_annotations" / relative_path / "objpose"
+                    )
+
                     # Create sequence metadata
                     sequence_info = {
                         "video_file": video_file,
@@ -140,6 +155,7 @@ class HOI4DAdapter(BaseAdapter):
                         "action": action,
                         "task": task,
                         "annotation_file": None,  # No color.json in current data
+                        "objpose_dir": objpose_dir if objpose_dir.exists() else None,
                     }
 
                     sequences.append(sequence_info)
@@ -188,10 +204,11 @@ class HOI4DAdapter(BaseAdapter):
                     if frame_numbers:
                         start_frame = min(frame_numbers)
                         end_frame = min(max(frame_numbers), total_frames - 1)
-                        frame_step = max(1, (end_frame - start_frame) // 100)
-                        return range(start_frame, end_frame + 1, frame_step)
+                        # Process all available frames with hand pose data
+                        return range(start_frame, end_frame + 1)
 
-        return range(0, min(100, total_frames))
+        # If no hand pose files found, process all video frames
+        return range(0, total_frames)
 
     def _get_hand_poses_for_frame(self, seq_info: Dict[str, Any], frame_idx: int):
         """Get hand poses for a specific frame."""
@@ -256,36 +273,155 @@ class HOI4DAdapter(BaseAdapter):
 
         return left_pose, right_pose
 
+    def _get_object_poses_for_frame(self, seq_info: Dict[str, Any], frame_idx: int):
+        """Get object poses for a specific frame."""
+        objpose_dir = seq_info.get("objpose_dir")
+        if not objpose_dir or not objpose_dir.exists():
+            return None
+
+        # Try different frame number formats
+        for padding in [5, 0]:  # Try 5-digit padded and unpadded
+            if padding > 0:
+                frame_str = f"{frame_idx:0{padding}d}.json"
+            else:
+                frame_str = f"{frame_idx}.json"
+
+            objpose_file = objpose_dir / frame_str
+            if objpose_file.exists():
+                try:
+                    with open(objpose_file) as f:
+                        data = json.load(f)
+                        if data:  # Only return if file has content
+                            return data
+                except (json.JSONDecodeError, FileNotFoundError):
+                    continue
+
+        return None
+
     def _store_sequence_data(
         self,
         traj_group,
+        seq_info,
         rgb_images,
         camera_poses,
         frame_indices,
         hand_poses_left,
         hand_poses_right,
+        object_poses,
     ):
-        """Store processed sequence data in HDF5 groups."""
+        """Store processed sequence data in HDF5 groups with EgoDex compatibility."""
         hands_group = traj_group["hands"]
         ego_camera_group = traj_group["cameras/ego_camera"]
 
-        # Store camera data
-        ego_camera_group.create_dataset("rgb", data=np.array(rgb_images))
-        ego_camera_group.create_dataset("pose_in_world", data=np.array(camera_poses))
-        ego_camera_group.create_dataset("pose_indices", data=np.array(frame_indices))
+        # Create metadata group (EgoDex compatibility)
+        metadata_group = traj_group.create_group("metadata")
 
-        # Store hand poses
+        # Create action label from HOI4D sequence info
+        action_parts = [
+            f"Subject {seq_info['subject']}",
+            f"Hand {seq_info['hand']}",
+            f"Camera {seq_info['camera']}",
+            f"Object {seq_info['noun']}",
+            f"Task {seq_info['action']}-{seq_info['task']}",
+        ]
+        action_label = " - ".join(action_parts)
+
+        metadata_group.attrs["action_label"] = action_label
+        metadata_group.attrs["source_dataset"] = "HOI4D"
+        metadata_group.attrs["source_identifier"] = str(seq_info["relative_path"])
+        metadata_group.attrs["uuid"] = str(uuid.uuid4())
+
+        # Store HOI4D-specific metadata as additional attributes
+        metadata_group.attrs["hoi4d_subject"] = seq_info["subject"]
+        metadata_group.attrs["hoi4d_hand"] = seq_info["hand"]
+        metadata_group.attrs["hoi4d_camera"] = seq_info["camera"]
+        metadata_group.attrs["hoi4d_noun"] = seq_info["noun"]
+        metadata_group.attrs["hoi4d_sequence"] = seq_info["sequence"]
+        metadata_group.attrs["hoi4d_action"] = seq_info["action"]
+        metadata_group.attrs["hoi4d_task"] = seq_info["task"]
+
+        # Create timestamps (30 FPS assumption like EgoDex)
+        timestamps_ns = np.arange(len(frame_indices), dtype=np.uint64) * (10**9 // 30)
+        metadata_group.create_dataset("timestamps_ns", data=timestamps_ns)
+
+        # Store camera data - RGB as GROUP like EgoDex (not single dataset)
+        rgb_group = ego_camera_group.create_group("rgb")
+        rgb_array = np.array(rgb_images)
+
+        # Store RGB frames as individual datasets or chunked datasets
+        # For compatibility, we'll store as a single dataset but in a group structure
+        rgb_group.create_dataset("frames", data=rgb_array)
+        rgb_group.attrs["num_frames"] = len(rgb_images)
+        rgb_group.attrs["height"] = rgb_array.shape[1]
+        rgb_group.attrs["width"] = rgb_array.shape[2]
+        rgb_group.attrs["channels"] = rgb_array.shape[3]
+
+        ego_camera_group.create_dataset("pose_in_world", data=np.array(camera_poses))
+        ego_camera_group.create_dataset(
+            "pose_indices", data=np.array(frame_indices, dtype=np.uint64)
+        )
+
+        # Note: HOI4D dataset does not contain skeleton data,
+        # so we skip the skeleton group
+        # This maintains compatibility while only including groups with actual data
+
+        # Store hand poses - keep MANO data but also add EgoDx-style pose_in_world
+        num_frames = len(frame_indices)
+
         if hand_poses_left:
             left_hand_group = hands_group.create_group("left")
+            # Store MANO parameters
             for key in hand_poses_left[0]:
                 data = np.array([pose[key] for pose in hand_poses_left])
-                left_hand_group.create_dataset(key, data=data)
+                left_hand_group.create_dataset(f"mano_{key}", data=data)
+
+            # Add EgoDex-style pose_in_world (identity matrices as placeholder)
+            left_poses = np.tile(np.eye(4), (num_frames, 1, 1)).astype(np.float32)
+            left_hand_group.create_dataset("pose_in_world", data=left_poses)
+            left_hand_group.create_dataset(
+                "pose_indices", data=np.array(frame_indices, dtype=np.uint64)
+            )
 
         if hand_poses_right:
             right_hand_group = hands_group.create_group("right")
+            # Store MANO parameters
             for key in hand_poses_right[0]:
                 data = np.array([pose[key] for pose in hand_poses_right])
-                right_hand_group.create_dataset(key, data=data)
+                right_hand_group.create_dataset(f"mano_{key}", data=data)
+
+            # Add EgoDex-style pose_in_world (identity matrices as placeholder)
+            right_poses = np.tile(np.eye(4), (num_frames, 1, 1)).astype(np.float32)
+            right_hand_group.create_dataset("pose_in_world", data=right_poses)
+            right_hand_group.create_dataset(
+                "pose_indices", data=np.array(frame_indices, dtype=np.uint64)
+            )
+
+        # Store object poses if available
+        valid_object_poses = [pose for pose in object_poses if pose is not None]
+        if valid_object_poses:
+            objects_group = traj_group.create_group("objects")
+
+            # For now, store the raw object pose data
+            # This can be extended based on the actual data structure
+            for i, obj_pose in enumerate(object_poses):
+                if obj_pose is not None:
+                    frame_group = objects_group.create_group(
+                        f"frame_{frame_indices[i]:05d}"
+                    )
+                    # Store the JSON data as attributes or datasets
+                    for key, value in obj_pose.items():
+                        if isinstance(value, (list, np.ndarray)):
+                            frame_group.create_dataset(key, data=np.array(value))
+                        else:
+                            frame_group.attrs[key] = value
+
+            objects_group.attrs["num_frames_with_objects"] = len(valid_object_poses)
+            object_indices = [
+                i for i, pose in enumerate(object_poses) if pose is not None
+            ]
+            objects_group.create_dataset(
+                "object_indices", data=np.array(object_indices, dtype=np.uint64)
+            )
 
     def process_sequence(self, seq_info: Dict[str, Any], traj_group: Any):
         """Processes a single data sequence and writes it to the HDF5 group."""
@@ -320,9 +456,7 @@ class HOI4DAdapter(BaseAdapter):
         ego_camera_group.attrs["is_ego"] = True
         ego_camera_group.create_dataset("intrinsics", data=intrinsics)
 
-        # Add sequence metadata
-        for key in ["subject", "hand", "camera", "noun", "sequence", "action", "task"]:
-            traj_group.attrs[key] = seq_info[key]
+        # Note: Metadata will be stored in metadata group for EgoDex compatibility
 
         # Determine frame range and process frames
         frame_range = self._determine_frame_range(seq_info, total_frames)
@@ -336,6 +470,7 @@ class HOI4DAdapter(BaseAdapter):
         hand_poses_right = []
         frame_indices = []
         camera_poses = []
+        object_poses = []
 
         for frame_idx in frame_range:
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
@@ -352,6 +487,10 @@ class HOI4DAdapter(BaseAdapter):
             hand_poses_left.append(left_pose)
             hand_poses_right.append(right_pose)
 
+            # Get object poses for this frame
+            obj_pose = self._get_object_poses_for_frame(seq_info, frame_idx)
+            object_poses.append(obj_pose)
+
         cap.release()
 
         if not rgb_images:
@@ -361,11 +500,13 @@ class HOI4DAdapter(BaseAdapter):
         # Store data in HDF5
         self._store_sequence_data(
             traj_group,
+            seq_info,
             rgb_images,
             camera_poses,
             frame_indices,
             hand_poses_left,
             hand_poses_right,
+            object_poses,
         )
 
         logging.info(
