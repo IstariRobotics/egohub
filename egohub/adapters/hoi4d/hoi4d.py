@@ -64,11 +64,14 @@ class HOI4DAdapter(BaseAdapter):
         try:
             intrinsics = self.get_camera_intrinsics(seq_info["camera_file"])
         except Exception as e:
-            logging.warning(f"Could not load intrinsics for {seq_info['relative_path']}, using defaults. Error: {e}")
+            logging.warning(
+                f"Could not load intrinsics for {seq_info['relative_path']}, "
+                f"using defaults. Error: {e}"
+            )
             intrinsics = np.array(
                 [[600.0, 0.0, 320.0], [0.0, 600.0, 240.0], [0.0, 0.0, 1.0]],
-                dtype=np.float32
-            ) # Default intrinsics
+                dtype=np.float32,
+            )  # Default intrinsics
 
         return DatasetInfo(
             camera_intrinsics=intrinsics,
@@ -377,8 +380,7 @@ class HOI4DAdapter(BaseAdapter):
 
             # Add frame indices for RGB data
             rgb_group.create_dataset(
-                "frame_indices",
-                data=np.array(frame_indices, dtype=np.uint64)
+                "frame_indices", data=np.array(frame_indices, dtype=np.uint64)
             )
 
         ego_camera_group.create_dataset("pose_in_world", data=np.array(camera_poses))
@@ -439,7 +441,7 @@ class HOI4DAdapter(BaseAdapter):
                             try:
                                 # Attempt to convert to a standard numpy array
                                 data_array = np.array(value)
-                                if data_array.dtype == 'O':
+                                if data_array.dtype == "O":
                                     # If it's an object array, it's non-uniform.
                                     # Store as a JSON string attribute instead.
                                     frame_group.attrs[key] = json.dumps(value)
