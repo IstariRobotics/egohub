@@ -56,24 +56,25 @@ class HOI4DAdapter(BaseAdapter):
         else:
             raise ValueError(f"Unsupported camera file format: {camera_file.suffix}")
 
-    def get_dataset_info(self) -> DatasetInfo:
+    def get_dataset_info(self, seq_info: Dict[str, Any]) -> DatasetInfo:
         """
         Loads dataset-wide metadata from the adapter's configuration file.
+        This now requires seq_info to load the correct camera intrinsics.
         """
-        # Default camera intrinsics for HOI4D (example values)
-        default_intrinsics = np.array(
-            [[600.0, 0.0, 320.0], [0.0, 600.0, 240.0], [0.0, 0.0, 1.0]],
-            dtype=np.float32,
-        )
+        try:
+            intrinsics = self.get_camera_intrinsics(seq_info["camera_file"])
+        except Exception as e:
+            logging.warning(f"Could not load intrinsics for {seq_info['relative_path']}, using defaults. Error: {e}")
+            intrinsics = np.array(
+                [[600.0, 0.0, 320.0], [0.0, 600.0, 240.0], [0.0, 0.0, 1.0]],
+                dtype=np.float32
+            ) # Default intrinsics
 
         return DatasetInfo(
-            camera_intrinsics=default_intrinsics,
-            view_coordinates="RDF",
+            camera_intrinsics=intrinsics,
             frame_rate=self.config["metadata"]["source_fps"],
             joint_names=self.source_joint_names,
             joint_hierarchy=self.source_skeleton_hierarchy,
-            joint_remap={},  # HOI4D uses MANO directly, no remapping needed
-            modalities={"rgb": True, "depth": False, "pointcloud": False, "imu": False},
         )
 
     def discover_sequences(self) -> List[Dict[str, Any]]:
@@ -435,8 +436,20 @@ class HOI4DAdapter(BaseAdapter):
                     # Store the JSON data as attributes or datasets
                     for key, value in obj_pose.items():
                         if isinstance(value, (list, np.ndarray)):
-                            frame_group.create_dataset(key, data=np.array(value))
+                            try:
+                                # Attempt to convert to a standard numpy array
+                                data_array = np.array(value)
+                                if data_array.dtype == 'O':
+                                    # If it's an object array, it's non-uniform.
+                                    # Store as a JSON string attribute instead.
+                                    frame_group.attrs[key] = json.dumps(value)
+                                else:
+                                    frame_group.create_dataset(key, data=data_array)
+                            except (TypeError, ValueError):
+                                # If conversion fails, serialize and store as attribute
+                                frame_group.attrs[key] = json.dumps(value)
                         else:
+                            # For other types, store as a simple attribute
                             frame_group.attrs[key] = value
 
             objects_group.attrs["num_frames_with_objects"] = len(valid_object_poses)
