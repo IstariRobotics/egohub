@@ -49,9 +49,14 @@ coverage.xml
 # pyenv
 .python-version
 
-# uv
+# uv (legacy)
 .venv/
 .uv_cache/
+uv.lock
+
+# Pixi
+# Keep pixi.toml and pixi.lock committed; ignore any local project-level Pixi state if created
+.pixi/
 
 # Linter
 .mypy_cache/
@@ -203,7 +208,7 @@ cython_debug/
 
 # Project-specific
 projectplan.md
-.cursor/ 
+.cursor/
 assets/mano/MANO_LEFT.pkl
 assets/mano/MANO_RIGHT.pkl
 .rrd

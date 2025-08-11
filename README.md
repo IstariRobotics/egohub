@@ -1,6 +1,6 @@
 <div align="center">
   <pre>
-┌─┐┌─┐┌─┐┬ ┬┬ ┬┌┐ 
+┌─┐┌─┐┌─┐┬ ┬┬ ┬┌┐
 ├┤ │ ┬│ │├─┤│ │├┴┐
 └─┘└─┘└─┘┴ ┴└─┘└─┘</pre>
 </div>
@@ -58,7 +58,7 @@ subgraph "Egocentric Data Processing Pipeline"
         direction TB
         ToolDetection["HuggingFace Model Tools"]
         ToolOther["Other Tools<br/>(Future Work)"]
-  
+
         CanonicalH5 -->|Reads data| ToolDetection
         ToolDetection -->|Writes object data| CanonicalH5
         CanonicalH5 -.-> ToolOther
@@ -70,7 +70,7 @@ subgraph "Egocentric Data Processing Pipeline"
         subgraph "Visualization & Debugging"
             AppRerun["Rerun Visualizer"]
         end
-  
+
         subgraph "Training Pipeline (Self-Supervised)"
             direction TB
             PytorchDS["PyTorch Dataset<br/>(EgocentricH5Dataset)"] --> VAE["1.Train MultimodalVAE"]
@@ -224,8 +224,8 @@ class MyAdapter(BaseAdapter):
 
 ### Prerequisites
 
-- Python 3.9+
-- `uv` package manager (`brew install uv` on macOS)
+- Python 3.11
+- Pixi environment manager (install via `curl -fsSL https://pixi.sh/install.sh | bash` or `brew install pixi` on macOS)
 
 ### Installation
 
@@ -234,13 +234,11 @@ class MyAdapter(BaseAdapter):
 git clone <repository-url>
 cd egohub
 
-# Set up environment and install dependencies
-uv venv
-source .venv/bin/activate
-uv pip install -e ".[dev,full]" # Install with all extras
+# Set up environment and install dependencies (Pixi)
+pixi install
 
-# Set up pre-commit hooks for automated quality checks
-pre-commit install
+# Install pre-commit hooks
+pixi run install-hooks
 ```
 
 ### Developer Workflow

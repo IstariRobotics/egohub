@@ -1,0 +1,40 @@
+[project]
+name = "egohub"
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64"]
+
+# Keep the base runtime minimal and let PyPI (via uv inside pixi) handle most packages
+[dependencies]
+python = "3.11.*"
+
+# Manage Python packages via PyPI using pixi's built-in uv integration
+[pypi-dependencies]
+# Install this project in editable mode with the "all" extra enabled
+egohub = { path = ".", editable = true, extras = ["all"] }
+
+# Developer tools and typing stubs
+ruff = ">=0.4.4"
+black = ">=24.4.2"
+pytest = ">=8.4.1"
+pytest-regressions = ">=2.8.1"
+pytest-xdist = "*"
+pytest-cov = "*"
+mypy = ">=1.10.0"
+pre-commit = "*"
+types-pyyaml = ">=6.0.12.20250516"
+build = "*"
+
+# Tasks mirror common developer workflows
+[tasks]
+install-hooks = "pre-commit install"
+ruff = "ruff check egohub"
+black = "black ."
+lint = "ruff check egohub && black --check ."
+test = "pytest -m 'not integration and not e2e and not perf' -n auto --cov=egohub"
+test-no-cov = "pytest -m 'not integration and not e2e and not perf' -vv -s -n 0"
+test-parallel = "pytest -m 'not integration and not e2e and not perf' -vv -s -n auto"
+test-smoke = "pytest tests/test_cli.py -vv -s -k help"
+build = "python -m build"
+
+# Convenience task matching the quick EgoDex conversion example
+convert-egodex-sample = "python -m egohub.cli.main convert egodex --raw-dir data/raw/EgoDex/test/add_remove_lid --output-file data/processed/EgoDex_add_remove_lid.hdf5 --num-sequences 1"
