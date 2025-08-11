@@ -175,6 +175,113 @@ def _setup_validate_parser(subparsers):
     )
 
 
+def _setup_render_bboxes_parser(subparsers):
+    """Set up the render-bboxes command parser."""
+    parser = subparsers.add_parser(
+        "render-bboxes",
+        help=(
+            "Render an MP4 with 2D bounding boxes from objects/{label}/bboxes_2d "
+            "and save to disk."
+        ),
+    )
+    parser.add_argument("h5_path", type=Path, help="Path to HDF5 file")
+    parser.add_argument("label", type=str, help="Object label under objects/{label}")
+    parser.add_argument(
+        "--output",
+        type=Path,
+        required=True,
+        help="Output MP4 path (will be overwritten)",
+    )
+    parser.add_argument("--max-frames", type=int, default=None)
+    parser.add_argument("--thickness", type=int, default=2)
+    parser.add_argument(
+        "--color",
+        type=str,
+        default="0,255,0",
+        help="BBox color as 'B,G,R' (default: 0,255,0)",
+    )
+
+
+def _handle_render_bboxes_command(args):
+    """Handle rendering an MP4 with overlaid 2D bboxes from HDF5."""
+    import cv2
+    import numpy as np
+
+    with h5py.File(args.h5_path, "r") as f:
+        # Pick first trajectory
+        traj_name = sorted([k for k in f.keys() if k.startswith("trajectory_")])[0]
+        traj = f[traj_name]
+
+        # Frames
+        rgb_group = (
+            traj["cameras"]["ego_camera"]["rgb"]
+            if "cameras" in traj and "ego_camera" in traj["cameras"]
+            else None
+        )
+        if rgb_group is None:
+            raise ValueError("No cameras/ego_camera/rgb found")
+
+        # BBoxes for label
+        objects_group = traj.get("objects")
+        if objects_group is None or args.label not in objects_group:
+            raise ValueError(
+                f"No objects/{args.label} found; run SegmentationTask first."
+            )
+        label_group = objects_group[args.label]
+        if "bboxes_2d" not in label_group:
+            raise ValueError(
+                f"objects/{args.label}/bboxes_2d not found; run SegmentationTask first."
+            )
+
+        bboxes = np.asarray(label_group["bboxes_2d"])  # (N,4)
+        frame_indices = (
+            np.asarray(label_group.get("frame_indices"))
+            if "frame_indices" in label_group
+            else np.arange(len(bboxes), dtype=np.uint64)
+        )
+
+        # FPS from timestamps if available
+        fps = 30.0
+        if "metadata" in traj and "timestamps_ns" in traj["metadata"]:
+            ts = np.asarray(traj["metadata"]["timestamps_ns"], dtype=np.int64)
+            if len(ts) >= 2:
+                diffs = np.diff(ts)
+                med = float(np.median(diffs))
+                if med > 0:
+                    fps = 1e9 / med
+
+        # Iterate frames and draw
+        from egohub.utils.video_utils import hdf5_to_cv2_video
+
+        frames = list(hdf5_to_cv2_video(rgb_group))
+        if args.max_frames is not None:
+            frames = frames[: args.max_frames]
+
+        h, w = frames[0].shape[:2]
+        color = tuple(int(x) for x in args.color.split(","))
+        writer = cv2.VideoWriter(
+            str(args.output),
+            cv2.VideoWriter_fourcc(*"mp4v"),
+            float(fps),
+            (w, h),
+        )
+
+        # Build map from frame idx to bbox
+        idx_to_bbox = {int(fi): b for fi, b in zip(frame_indices, bboxes)}
+
+        for i, frame in enumerate(frames):
+            box = idx_to_bbox.get(i)
+            if box is not None:
+                x, y, bw, bh = [int(v) for v in box]
+                cv2.rectangle(frame, (x, y), (x + bw, y + bh), color, args.thickness)
+            writer.write(frame)
+
+        writer.release()
+        logging.info(
+            "Wrote MP4 to %s (fps=%.2f, frames=%d)", args.output, fps, len(frames)
+        )
+
+
 def _handle_convert_command(args):
     """Handle the convert command."""
     try:
@@ -342,6 +449,7 @@ def main():
     _setup_visualize_parser(subparsers)
     _setup_process_parser(subparsers)
     _setup_validate_parser(subparsers)
+    _setup_render_bboxes_parser(subparsers)
 
     args = parser.parse_args()
 
@@ -354,6 +462,8 @@ def main():
         _handle_process_command(args)
     elif args.command == "validate":
         _handle_validate_command(args)
+    elif args.command == "render-bboxes":
+        _handle_render_bboxes_command(args)
 
 
 if __name__ == "__main__":

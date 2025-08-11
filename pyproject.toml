@@ -118,4 +118,5 @@ dev = [
 
 [tool.ruff.lint.per-file-ignores]
 "egohub/rerun_log_utils.py" = ["F821", "F722"]
+"egohub/utils/auto_setup.py" = ["I001"]
 "egohub/adapters/hoi4d/hoi4d.py" = ["C901"]
