@@ -27,4 +27,4 @@ repos:
     -   id: mypy
         # mypy needs project dependencies to run correctly
         additional_dependencies:
-        - ".[dev,full]" 
+        - ".[dev,all]"
