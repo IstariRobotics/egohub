@@ -482,7 +482,7 @@ packages:
 - pypi: ./
   name: egohub
   version: 0.1.0
-  sha256: 64fd797ae264a805250511954750ee6c432bbd644b7928785038a1f22a0a9f1d
+  sha256: 62b467e8d1c88c213b9dc0c5a42e48423e086ef90e955be15bd88b4560792e7d
   requires_dist:
   - torch
   - torchvision
